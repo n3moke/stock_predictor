@@ -1,0 +1,142 @@
+import asyncio
+import datetime
+from nicegui import ui, background_tasks
+import pandas as pd
+import yfinance as yf
+
+from dataprovider import Dataprovider
+from llm import LLM
+from settings import Settings
+
+
+settings = Settings()
+llm = LLM()
+dataprovider = Dataprovider()
+ui.label("Generative AI - Aktienprognose").classes('text-xl')
+with ui.tabs().classes('w-full') as tabs:
+    one = ui.tab('Auswahl')
+    two = ui.tab('Daten')
+    three = ui.tab('Prompt')
+    four = ui.tab('Prognose')
+with ui.tab_panels(tabs, value=one).classes('w-full'):
+    with ui.tab_panel(one):
+        ui.label('Zeitraum auswählen')
+        ui.toggle({1:'1 Monat', 3:'3 Monate',6:' 6 Monate',12: '12 Monate'},on_change=settings.update_dates).bind_value(settings,'timeframe')
+        ui.label('Enddatum wählen')
+        with ui.input('Date').bind_value(settings, 'end_date_str') as date:
+            with ui.menu().props('no-parent-event') as menu:
+                with ui.date(value=settings.end_date_str, on_change=settings.update_dates).bind_value(settings,'end_date_str'):
+                    with ui.row().classes('justify-end'):
+                        ui.button('Close', on_click=menu.close).props('flat')
+            with date.add_slot('append'):
+                ui.icon('edit_calendar').on('click', menu.open).classes('cursor-pointer')
+        ui.label('Aktienauswahl')
+        table = ui.table(
+            columns=[
+            {'name': 'name', 'label': 'Firmenname', 'field': 'name', 'sortable': True, 'align': 'left'},
+            {'name': 'Aktie', 'label': 'Aktienkürzel', 'field': 'aktie', 'sortable': True}],
+            rows=[{'name': 'Amazon', 'aktie': 'AMZN'}, {'name': 'Adobe Inc.', 'aktie': 'ADBE'}, {'name': 'Advanced Micro Devices', 'aktie': 'AMD'},],
+            row_key='name',
+            on_select=lambda e: settings.update_aktien(e.selection),
+        )
+        table.set_selection('single')
+        ui.button('GOTO Daten', on_click=lambda: tabs.set_value(two))
+    with ui.tab_panel(two):
+        stock_table_container = ui.column()
+        with stock_table_container as stock_parent_container:
+            aktiendaten_table :ui.table = dataprovider.get_pandas_single_stock_table(settings.aktien, settings.end_date, settings.start_date)
+
+        ui.button('Refresh Stock Data', on_click=lambda _: set_and_update_table())
+        goToTabThree =  ui.button('Goto Prompt', on_click=lambda: tabs.set_value(three))
+        ui.switch(value=True, on_change=lambda e: goToTabThree.props(remove='disabled') if e.value else goToTabThree.props('disabled'))
+        
+                    
+        def set_and_update_table():
+            if not settings.aktien:
+                ui.notify('Please select a stock first to retreive historical data!')
+            with stock_table_container as stock_parent_container:
+                print('deleting children(table) from parentcontainer and add it again to update it...')
+                stock_parent_container.clear()
+                df = dataprovider.get_pandas_single_stock(settings.aktien, settings.end_date, settings.start_date)
+                ui.table.from_pandas(df,row_key='Date',pagination={'rowsPerPage': 10},title=settings.aktien[0]['name'])
+        
+    with ui.tab_panel(three):
+        ui.toggle({0:'ARIMA', 1:'Sentiment',2: 'ARIMA & Sentiment'},on_change=settings.update_forecast_method).bind_value(settings,'forecastMethod')
+        with ui.card().bind_visibility(settings,'useArima').classes('w-full') as arima_card:
+        
+            ui.textarea(label='Text', placeholder='start typing').bind_value(llm, 'arima_prompt_text').classes('w-full h-[60vh]')
+            ui.button('Calculate Arima forecast', on_click=lambda:  do_arima_forecast()).tooltip('A arima is done with the given timeframe selected in the first tab. The accuracy befenits normally from a longer timeframe.')       
+            ui.spinner('dots', size='lg', color='red').bind_visibility(llm, 'isArimaRunning')
+
+        with ui.card().bind_visibility(settings,'useSentiment').classes('w-full') as sentiment_card:
+
+            ui.textarea(label='Text', placeholder='start typing').bind_value(llm, 'sentiment_prompt_text').classes('w-full h-[60vh]')
+
+            ui.button('Do Sentiment Analysis', on_click=lambda:  do_sentiment_analysis()).tooltip('A sentiment analysis is done with press releases of the selected company and the given timeframe. It could be, that no press releases are available for the timeframe.')
+        
+            sentiment_progressbar = ui.linear_progress(value=0).props('instant-feedback').bind_visibility(llm,'isSentimentRunning').bind_value(llm, 'sentimentProgess')
+            sentiment_progressbar.visible = False
+
+        with ui.card().bind_visibility(settings,'useCombined').classes('w-full') as combined_card:
+        
+            ui.textarea(label='Text', placeholder='start typing').bind_value(llm, 'combined_prompt').classes('w-full h-[60vh]')
+            ui.button('Do combined forecast', on_click=lambda:  do_combined_forecast()).tooltip('A arima is done with the given timeframe selected in the first tab. The accuracy befenits normally from a longer timeframe.')       
+            ui.spinner('dots', size='lg', color='red').bind_visibility(llm, 'isArimaRunning')
+     
+        def do_sentiment_analysis():
+            if not settings.aktien:
+                ui.notify('Please select a in tab 1 stock first!')
+            else:
+                background_tasks.create(llm.get_sentiment_respone(llm.LLM_TYPE.GEMMA3,settings.aktien,settings.start_date, settings.end_date))
+
+        def do_arima_forecast():
+            if not settings.aktien:
+                ui.notify('Please select a in tab 1 stock first!')
+            else:
+                background_tasks.create(llm.get_arima_response(llm.LLM_TYPE.GEMMA3,settings.aktien,settings.start_date, settings.end_date))
+
+        def do_combined_forecast():
+            if not settings.aktien:
+                ui.notify('Please select a in tab 1 stock first!')
+            else:
+                background_tasks.create(llm.get_arima_response(llm.LLM_TYPE.GEMMA3,settings.aktien,settings.start_date, settings.end_date))
+            
+    with ui.tab_panel(four):
+        ui.label('Prognose')
+        
+        with ui.card().bind_visibility(settings,'useArima').classes('w-full') as arima_result_card:
+            arima_table_container = ui.column()
+            with arima_table_container as arima_parent_container:
+                
+                ui.table.from_pandas(llm.arima_response)
+                
+
+        with ui.card().bind_visibility(settings,'useSentiment').classes('w-full') as sentiment_result_card:
+            sent_table_container = ui.column()
+            with sent_table_container as sent_parent_container:
+                ui.table.from_pandas(llm.sentiment_response)
+        
+        with ui.card().bind_visibility(settings,'useCombined').classes('w-full') as combined_result_card:
+            ui.label("combined")
+
+        ui.button('Load Result', on_click=lambda _: display_predictions())
+
+        def display_predictions():
+            set_sentiment_table()
+            set_arima_table()
+        
+        def set_sentiment_table():
+            with sent_table_container as sent_parent_container:
+                sent_parent_container.clear()
+                print(llm.sentiment_response)
+                
+                sent_table_title = f"Sentiment Analysis of press releases about {settings.aktien[0]['name']}"
+                ui.table.from_pandas(llm.sentiment_response,title=sent_table_title).classes('w-full')
+
+        def set_arima_table():
+            with arima_table_container as arima_parent_container:
+                arima_parent_container.clear()
+                arima_table_title = f"Arima stock forecast for {settings.aktien[0]['name']}"
+                ui.table.from_pandas(llm.arima_response,title=arima_table_title).classes('w-full')
+#ui.run()
+ui.run(native=True)
