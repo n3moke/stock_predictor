@@ -1,10 +1,11 @@
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
+from dataprovider import Dataprovider
 
 class Settings:
     def __init__(self):
         self.timeframe: int = 1
-        self.end_date_str = '2025-01-31'
+        self.end_date_str = '2025-08-31'
         self.arima = True
         self.lstm = True
         self.aktien = []
@@ -15,6 +16,8 @@ class Settings:
         self.useArima: bool = True
         self.useSentiment: bool = False
         self.useCombined: bool = False
+        self.newsTypeInteger: int = 0
+        self.newsType: Dataprovider.NEWSTYPE = Dataprovider.NEWSTYPE.PRESS
 
     def __call__(self, aktien):
         self.aktien = aktien
@@ -33,3 +36,11 @@ class Settings:
         self.useArima = (self.forecastMethod == 0)
         self.useSentiment = (self.forecastMethod == 1)
         self.useCombined = (self.forecastMethod == 2)
+
+    def update_newsType(self): 
+        if(self.newsTypeInteger == 0):
+            self.newsType = Dataprovider.NEWSTYPE.PRESS
+        elif(self.newsTypeInteger == 1):
+            self.newsType = Dataprovider.NEWSTYPE.NEWS
+        elif(self.newsTypeInteger == 2):
+            self.newsType = Dataprovider.NEWSTYPE.ALL

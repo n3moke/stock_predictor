@@ -5,6 +5,7 @@ from enum import Enum
 import pandas as pd
 import yfinance as yf
 from nicegui import ui, background_tasks
+import json
 
 class Dataprovider:
     class NEWSTYPE(Enum):
@@ -18,8 +19,13 @@ class Dataprovider:
     def __call__(self, aktien:list[str]):
         self.aktien = aktien
 
+    def load_stocks(self):
+        with open('stocklist.json', 'r') as file:
+            self.aktien_list = json.load(file)
+
     def fetch_historical_stock_data(self,aktien:str, end_date: datetime, start_date:datetime) -> pd.DataFrame:
         return yf.download(aktien, start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d'))[['Close']]
+    
     
     def fetch_news_single_ticker(self, aktie:str ,newscount:int, start_date: datetime,  end_date: datetime, news_type: NEWSTYPE ) -> list[dict]:
         ticker = yf.Ticker(aktie)
@@ -49,13 +55,20 @@ class Dataprovider:
         if print_log : print(df)
         return df
 
-    def prepare_stock_data_arima(self, data: pd.DataFrame, print_log:bool = True):
+    def prepare_stock_data_arima(self, data: pd.DataFrame, print_log:bool = True) -> str:
         #round column Close to 3 decimal places
         data['Close'] = data['Close'].round(3)
         data.columns = [f"{col}" for col in data.columns]
         data.columns = data.columns.to_flat_index()
         data.insert(0, 'Date', data.index.strftime('%Y-%m-%d'))
         data.columns = ['Date', 'Close']
+        csv = data.to_csv(index=False)
+        if print_log : print(csv)
+        return csv
+    
+    def prepare_sentiment_combined_forecast(self,data:pd.DataFrame,  print_log:bool = True) -> str:
+        #drop summary column
+        data.drop('summary', axis=1, inplace=True)
         csv = data.to_csv(index=False)
         if print_log : print(csv)
         return csv
