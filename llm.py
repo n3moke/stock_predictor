@@ -2,16 +2,19 @@ import asyncio
 from datetime import datetime 
 from enum import Enum
 from io import StringIO
+import os
 import re
 import pandas as pd
 from ollama import chat
 from ollama import ChatResponse
 from ollama import AsyncClient
 from nicegui import ui
+from loguru import logger # type: ignore
 
 import yfinance as yf
 
 from dataprovider import Dataprovider
+from util.perf import measure_time
 
 class LLM:
     def __init__(self):
@@ -42,7 +45,7 @@ If data for certain days are missing in the second csv, for example weekends, ex
 If date is missing for certain dates in the first csv, there are simply no news articles for that specific day.
 
 Your task is to compute a ARIMA forecast with the given data of the second csv. 
-Your task is to combine these datasets by matching on the date column, and then compute a forecast for the next {forcastRangeString} after {end_date}, excluding weekends and national holidays. 
+Your task is to combine these datasets by matching on the date column, and then compute a forecast ONLY! for the next {forcastRangeString} days after {end_date}, excluding weekends and national holidays. So your answer must only contain {forcastRangeString} rows of data!
 Use the sentiment score as an influencing factor to improve or refine the forecast.
 
 First CSV String (historical stock data):
@@ -50,13 +53,42 @@ First CSV String (historical stock data):
 Second CSV (Sentiment):
 {stock_csv}
 
-Return the result as a CSV string with two columns: date, prediction. Also add a short summary how the sentiment scores influenced the prediction in the following format.
-Wrap it in \'\'\'csv at the beginning and \'\'\' at the end. After the prediction show me how the sentiment score influenced the prediction. Wrap this in ### at the beginning and ### at the end.
+Return the result as a CSV string with two columns: date, prediction.
+```csv
+date,prediction
+YYYY-MM-DD,###
+YYYY-MM-DD,###
+YYYY-MM-DD,###
+```
 
-
+Replace YYYY-MM-DD with forecasted dates and ### with the numeric predictions.
+The CSV must be inside the ```csv ``` block.
+Do not include any additional text, explanations, code, or apologetic language
+AGAIN I only want {forcastRangeString} days of forecast after {end_date}.
 Important! I want you to compute the forecast. I don't want python code!!!
 
 '''
+#  Also add a short summary how the sentiment scores influenced the prediction in the following format.
+
+# @@@
+# <Insert 1-2 sentence summary interpreting the forecast, referencing any relevant data factors, in plain language. Do not reference yourself or the format.>
+# @@@
+# , with the summary below as plain text inside two ### lines.
+
+# Return the result as a CSV string with two columns: date, prediction. Also add a short summary how the sentiment scores influenced the prediction in the following format.
+# Wrap it in $$$ csv at the beginning AND $$$ at the end!!!. After the prediction show me how the sentiment score influenced the prediction. Wrap this in ### at the beginning AND!!! ### at the end. Here is an example answer:
+# $$$csv
+# date,prediction
+# 2025-08-31,178.5
+# 2025-09-01,179.2
+# 2025-09-02,180.1
+# 2025-09-04,181.5
+# $$$
+# ###
+# Throughout the forecast, the sentiment scores played a stabilizing role.
+# ###
+
+
 # Important! I want the prediction as csv AND The 
 #As extra after the wrapped csv show me how the sentiment score influenced the prediction. Wrap this in ###
  
@@ -80,21 +112,21 @@ Important! I want you to compute the forecast. I don't want python code!!!
         DEEPSEEK70B:str = 'deepseek-r1:70b'
         GPT: str = 'gpt-oss:20b'
 
-    async def _ask_llm_sentiment(self, llm_type: LLM_TYPE, input_content: str, system_prompt:str , print_log : bool= True) ->  str | tuple[str, str]:
-        if print_log : print(input_content, '\n\n', system_prompt, '\n\n')
+    async def _ask_llm_sentiment(self, llm_type: LLM_TYPE, input_content: str, system_prompt:str) ->  str | tuple[str, str]:
+        logger.debug(f"Input content \n{input_content} \n\n  prompt \n{system_prompt} \n\n")
         response: ChatResponse = await AsyncClient().chat(model=llm_type.value, messages=[
             {'role' : 'system', 'content' : system_prompt},
             {'role': 'user','content': input_content}
         ])
         response_text = response['message']['content']
-        if print_log: print(response_text)
+        logger.debug(response_text)
         if(self.isSentimentRunning):
             #because of async.gather must use self.current_sentiment_number here for calculation
             self.current_sentiment_number += 1
             self.sentimentProgess = round(self.current_sentiment_number / self.numberOfSentiments,2)
-            print("Sentiment Progress: ", self.sentimentProgess)
-            print("current_sentiment_number: ", self.current_sentiment_number)
-            print("numberOfSentiments: ",self.numberOfSentiments )
+            logger.debug(f"Sentiment Progress: {self.sentimentProgess}")
+            logger.debug(f"current_sentiment_number: {self.current_sentiment_number}")
+            logger.debug(f"numberOfSentiments: {self.numberOfSentiments}")
         if(llm_type in (self.LLM_TYPE.DEEPSEEK ,self.LLM_TYPE.DEEPSEEK70B)) :
             # Extract everything inside <think>...</think> - this is the Deep Think
             think_texts = re.findall(r'<think>(.*?)</think>', response_text, flags=re.DOTALL)
@@ -102,34 +134,33 @@ Important! I want you to compute the forecast. I don't want python code!!!
             think_texts = "\n\n".join(think_texts).strip()
             # Exclude the Deep Think, and return the response
             response_text= re.sub(r'<think>.*?</think>', '', response_text, flags=re.DOTALL).strip()
-            print(response_text)
+            logger.debug(response_text)
         self.response_text = response_text
         # Return either the context, or a tuple with the context and deep think if LLM.TYPE is DEEPSEEK or DEEPSEEK70B
         return response_text.rstrip() if not (llm_type in  (self.LLM_TYPE.DEEPSEEK ,self.LLM_TYPE.DEEPSEEK70B)) else (response_text, think_texts)
 
 
-    async def ask_llm_prompt(self, llm_type: LLM_TYPE, system_prompt: str, print_log : bool= True) ->  str | tuple[str, str]:
+    async def ask_llm_prompt(self, llm_type: LLM_TYPE, system_prompt: str) ->  str | tuple[str, str]:
         self.isArimaRunning = True
-        if print_log : print('\n\n', system_prompt, '\n\n')
         response: ChatResponse = await AsyncClient().chat(model=llm_type.value, messages=[
             {'role': 'user','content': system_prompt}
         ])
         response_text = response['message']['content']
         self.isArimaRunning = False
-        if print_log: print(response_text)
+        logger.debug(response_text)
         if(llm_type in (self.LLM_TYPE.DEEPSEEK ,self.LLM_TYPE.DEEPSEEK70B)) :
             think_texts = re.findall(r'<think>(.*?)</think>', response_text, flags=re.DOTALL)
             think_texts = "\n\n".join(think_texts).strip()
             response_text= re.sub(r'<think>.*?</think>', '', response_text, flags=re.DOTALL).strip()
-            print(response_text)
+            logger.debug(response_text)
         # Return either the context, or a tuple with the context and deep think if LLM.TYPE is DEEPSEEK or DEEPSEEK70B
         return response_text if not (llm_type in  (self.LLM_TYPE.DEEPSEEK ,self.LLM_TYPE.DEEPSEEK70B)) else (response_text, think_texts)
     
-    async def _process_articles(self,llm_type:LLM_TYPE, news:pd.DataFrame, company: str,print_log = True):
+    async def _process_articles(self,llm_type:LLM_TYPE, news:pd.DataFrame, company: str):
         sent_prompt = self.sentiment_prompt_text.format(company=company)
-        coroutines = [self._ask_llm_sentiment(llm_type, article, sent_prompt,print_log) for article in news['summary']]
+        coroutines = [self._ask_llm_sentiment(llm_type, article, sent_prompt) for article in news['summary']]
         sentiments = await asyncio.gather(*coroutines)
-        print(type(sentiments))
+        logger.debug(type(sentiments))
         news['Sentiment Score'] = sentiments
         self.sentiment_response = news
         self._resetSentiment()
@@ -142,133 +173,146 @@ Important! I want you to compute the forecast. I don't want python code!!!
         self.current_sentiment_number = 0
         self.numberOfSentiments = 0 
 
-    
-    async def get_sentiment_respone(self,llm_type: LLM_TYPE, aktien:list[str],start_date: datetime, end_date: datetime,newsType: Dataprovider.NEWSTYPE, print_log = True) -> pd.DataFrame:
+    @measure_time
+    async def get_sentiment_respone(self,llm_type: LLM_TYPE, aktien:list[str],start_date: datetime, end_date: datetime,newsType: Dataprovider.NEWSTYPE) -> pd.DataFrame:
         if not aktien:
+            logger.warning("No stock was selected.")
             ui.notify('Please a stock first.')
             return self.sentiment_response
         else:
+            stock = aktien[0]['aktie']
+            stockName = aktien[0]['name']
+            logger.info(f"starting sentiment analysis of stock {stock}", )
             self.isSentimentRunning = True
-            print(aktien)
-            print(aktien[0]['aktie'])
-            print(start_date, '  ', end_date)
-            news = self.dp.fetch_news_single_ticker(aktien[0]['aktie'], 200,start_date, end_date, newsType)
+            logger.debug(stock)
+            logger.debug(f"From {start_date} to {end_date}")
+            news = self.dp.fetch_news_single_ticker(stock, 200,start_date, end_date, newsType)
             self.numberOfSentiments = len(news)
-            print(self.numberOfSentiments)
+            logger.debug(f"Number of news articles: {self.numberOfSentiments}")
             news = self.dp.prepare_news_sentiment(news)
-            sentiment_analysis = await self._process_articles(llm_type, news, aktien[0]['name'],print_log)
+            sentiment_analysis = await self._process_articles(llm_type, news, stockName)
             # Convert to datetime
             sentiment_analysis['pubDate'] = pd.to_datetime(sentiment_analysis['pubDate'])
 
             # Strip time, keep only date
             sentiment_analysis['pubDate'] = sentiment_analysis['pubDate'].dt.date
-            print(sentiment_analysis)
-            print(type(sentiment_analysis))
+            logger.info(f"printing sentiment analysis result \n {sentiment_analysis}")
+            self.save_response_as_csv(aktien[0]['aktie'],sentiment_analysis,'sentiment')
             return sentiment_analysis
     
-
-    async def get_arima_response(self,llm_type: LLM_TYPE, aktien:list[str],start_date: datetime, end_date: datetime,print_log = True) -> pd.DataFrame:
+    @measure_time
+    async def get_arima_response(self,llm_type: LLM_TYPE, aktien:list[str],start_date: datetime, end_date: datetime) -> pd.DataFrame:
         if not aktien:
+            logger.warning("No stock was selected.")
             ui.notify('Please a stock first.')
             return self.arima_response
         else:
             self.isArimaRunning = True
-            print(aktien)
-            print(aktien[0]['aktie'])
-            print(start_date, '  ', end_date)
+            stock = aktien[0]['aktie']
+            logger.debug(stock)
+            logger.debug(f"From {start_date} to {end_date}")
 
-            stock = self.dp.fetch_historical_stock_data(aktien[0]['aktie'], end_date, start_date)
-            stock = self.dp.prepare_stock_data_arima(stock)
+            stockData = self.dp.fetch_historical_stock_data(stock, end_date, start_date)
+            stockData = self.dp.prepare_stock_data_arima(stockData)
 
-            prompt = self.format_arima_prompt(stock,start_date,end_date,10,aktien)
-            print(prompt)
-            response = await self.ask_llm_prompt(llm_type,prompt,False)
+            prompt = self.format_arima_prompt(stockData,start_date,end_date,10,aktien)
+            logger.debug(f"prompt: \n {prompt}")
+            response = await self.ask_llm_prompt(llm_type,prompt)
             self.isArimaRunning = False
-            print(response)
-            self._process_and_set_arima_response(response)
+            logger.info(response)
+            arima_response = self._process_and_set_arima_response(response)
+            self.save_response_as_csv(stock,arima_response,'arima')
             return response
-        
-    async def get_combined_response(self,llm_type: LLM_TYPE, aktien:list[str],start_date: datetime, end_date: datetime, newsType: Dataprovider.NEWSTYPE, print_log = True) -> pd.DataFrame:
+
+    @measure_time   
+    async def get_combined_response(self,llm_type: LLM_TYPE, aktien:list[str],start_date: datetime, end_date: datetime, newsType: Dataprovider.NEWSTYPE) -> pd.DataFrame:
         if not aktien:
+            logger.warning("No stock was selected.")
             ui.notify('Please a stock first.')
             return self.arima_response
         else:
             self.isCombinedRunning = True
+            stock = aktien[0]['aktie']
+            stockName = aktien[0]['name']
+
             #First do sentiment analysis
-            news = self.dp.fetch_news_single_ticker(aktien[0]['aktie'], 200,start_date, end_date, newsType)
+            news = self.dp.fetch_news_single_ticker(stock, 200,start_date, end_date, newsType)
             self.numberOfSentiments = len(news)
-            print(self.numberOfSentiments)
+            logger.debug(f"Number of news articles: {self.numberOfSentiments}")
             news = self.dp.prepare_news_sentiment(news)
-            sentiment_analysis = await self._process_articles(llm_type, news, aktien[0]['name'],print_log)
+            sentiment_analysis = await self._process_articles(llm_type, news, stockName)
             # Convert to datetime
             sentiment_analysis['pubDate'] = pd.to_datetime(sentiment_analysis['pubDate'])
 
             # Strip time, keep only date
             sentiment_analysis['pubDate'] = sentiment_analysis['pubDate'].dt.date
-            print(sentiment_analysis)
+            logger.info(f"Sentiment Result for combined forecast: \n {sentiment_analysis}")
             sentiment_csv = self.dp.prepare_sentiment_combined_forecast(sentiment_analysis)
 
             #now get historical stock data
-            print(aktien)
-            print(aktien[0]['aktie'])
-            print(start_date, '  ', end_date)
+            logger.debug(stock)
+            logger.debug(f"From {start_date} to {end_date}")
 
-            stock = self.dp.fetch_historical_stock_data(aktien[0]['aktie'], end_date, start_date)
-            stock_csv = self.dp.prepare_stock_data_arima(stock)
+            stockData = self.dp.fetch_historical_stock_data(stock, end_date, start_date)
+            stock_csv = self.dp.prepare_stock_data_arima(stockData)
 
             #prepare prompt
             prompt = self.format_combined_prompt(sentiment_csv,stock_csv,start_date,end_date,10,aktien)
-
-            print(prompt)
+            logger.debug("formatted prompt: \n {prompt}")            
+            response = await self.ask_llm_prompt(llm_type,prompt)
             
-            
-            
-            response = await self.ask_llm_prompt(llm_type,prompt,False)
-            
-            print('Response: ',response, '\n##########################')
-            self._process_and_set_combined_response(response)
+            logger.info(f"combined response: {response} \n##########################")
+            processed_response =  self._process_and_set_combined_response(response)
+            #save response as csv
+            self.save_response_as_csv(stock,processed_response, 'combined')
             self.isCombinedRunning = False
             return response
 
-    def _process_and_set_arima_response(self, response:str):
+    def _process_and_set_arima_response(self, response:str) -> pd.DataFrame:
             pattern = r"```csv([\s\S]*?)```"
             match = re.search(pattern, response)
             extracted_csv = match.group(1) if match else None
-            print('Regex result: ', extracted_csv)
-            
-            self.arima_response = pd.read_csv(StringIO(extracted_csv))
-            print(self.arima_response)
+            logger.debug(f"Regex result: \n {extracted_csv}")
+            arima_result = pd.read_csv(StringIO(extracted_csv))
+            self.arima_response = arima_result
+            logger.debug(self.arima_response)
+            return arima_result
 
-    def _process_and_set_combined_response(self, response):
-            prediction_pattern = r"```csv([\s\S]*?)###"
+    def _process_and_set_combined_response(self, response) -> pd.DataFrame:
+            # prediction_pattern = r"```csv([\s\S]*?)(?=```|###|@@@|[a-zA-Z])"
+            # prediction_pattern = r"```csv([\s\S]*?)(?=```|###|@@@|[a-zA-Z])"
+
+            prediction_pattern = r"```csv([\s\S]*?)```"
             match_sentiment = re.search(prediction_pattern, response)
             extracted_csv = match_sentiment.group(1) if match_sentiment else None
+            logger.info(f"extracted csv: \n{extracted_csv}")
             #print('Regex result: ', extracted_csv)
             #extract text between ### and ### or '''
-            reasoning_pattern = r"###([\s\S]*?)(?=```|###)"
-            match_reasoning = re.search(reasoning_pattern, response)
-            extracted_reasoning = match_reasoning.group(1) if match_reasoning else None
-            self.combined_response = pd.read_csv(StringIO(extracted_csv))
-            self.combined_reasoning = extracted_reasoning
-            print(self.combined_response, '\n\n', self.combined_reasoning)
+            # reasoning_pattern = r"@@@([\s\S]*?)(?=```|###|@@@)"
+            # match_reasoning = re.search(reasoning_pattern, response)
+            # extracted_reasoning = match_reasoning.group(1) if match_reasoning else None
+            combined_result = pd.read_csv(StringIO(extracted_csv))
+            self.combined_response = combined_result
+            # self.combined_reasoning = extracted_reasoning
+            #print(self.combined_response, '\n\n', self.combined_reasoning)
+            logger.info(combined_result)
+            return combined_result
 
     def create_sentiment_table(self,data: pd.DataFrame) -> ui.table:
         data.columns = [f"{col}" for col in data.columns]
-        print(data.columns)
         table_data = data.to_dict('records')
         columns = [{'name': col, 'label': col, 'field': col} for col in data.columns]
-        print(columns)
+        logger.debug(f"sentiment columns: {columns}")
         return ui.table(columns=columns, rows=table_data, row_key='Date',pagination={'rowsPerPage': 10})
 
 
-    def get_sentiment_analysis_results(self,llm_tpye: LLM_TYPE, aktien:list[str],print_log = True):
-        print(aktien)
-        print(aktien[0]['aktie'])
-        news = self.dp.fetch_news_single_ticker(aktien[0]['aktie'], 10,datetime(2020, 5, 17), datetime(2020, 5, 17), self.dp.NEWSTYPE.PRESS)
+    def get_sentiment_analysis_results(self,llm_tpye: LLM_TYPE, aktien:list[str]):
+        stock = aktien[0]['aktie']
+        stockName = aktien[0]['name']
+        news = self.dp.fetch_news_single_ticker(stock, 10,datetime(2020, 5, 17), datetime(2020, 5, 17), self.dp.NEWSTYPE.PRESS)
         news = self.dp.prepare_news_sentiment(news)
-        sentiment_analysis = self._process_articles(llm_tpye, news, aktien[0]['name'],print_log)
-        print(sentiment_analysis)
-        print(type(sentiment_analysis))
+        sentiment_analysis = self._process_articles(llm_tpye, news, stockName)
+        logger.info(sentiment_analysis)
         return sentiment_analysis
     
     def format_arima_prompt(self, csv: str,start_date:datetime, end_date:datetime, forcastrange: int, company : list[str]) -> str:
@@ -282,7 +326,14 @@ Important! I want you to compute the forecast. I don't want python code!!!
         day_format = "%Y-%m-%d"
         prompt = self.combined_prompt_text.format(companyName=company[0]['aktie'], companyStockName=company[0]['name'],sentiment_csv=sentiment_csv, stock_csv=stock_csv, start_date=start_date.strftime(day_format), end_date=end_date.strftime(day_format), startDayStr=start_date.strftime(daystring_format), endDayStr=end_date.strftime(daystring_format),forcastRangeString=forcastrange)
         return prompt
-   
+    
+    def save_response_as_csv(self, stock :str , data: pd.DataFrame, responseType: str):
+        dir = 'results'
+        os.makedirs(dir, exist_ok=True)
+        timestamp = datetime.now().strftime('%Y-%d-%m-%d_%H_%M_%S')
+        # filename = f"log_{responseType}_{stock}_{timestamp}.csv"
+        filename = os.path.join(dir, f"{timestamp}_log_{responseType}_{stock}.csv")
+        data.to_csv(filename,index=False)
 
 if __name__ == '__main__': 
 
@@ -311,9 +362,9 @@ if __name__ == '__main__':
     # resp_deep = asyncio.run(llm.get_sentiment_respone(llm.LLM_TYPE.DEEPSEEK,stock_list))
     # resp_gpt = asyncio.run(llm.get_sentiment_respone(llm.LLM_TYPE.GPT,stock_list))
 
-    print('GEMMA3 \n', resp_gemma, '\n\n')
-    # print('DEEPSEEK \n', resp_deep, '\n\n')
-    # print('GPT \n', resp_gpt, '\n\n')
+    logger.info('GEMMA3 \n', resp_gemma, '\n\n')
+    # logger.info('DEEPSEEK \n', resp_deep, '\n\n')
+    # logger.info('GPT \n', resp_gpt, '\n\n')
 
     ##########################################
     ############     Arima    ################
@@ -339,4 +390,4 @@ if __name__ == '__main__':
     # '''
 
     # response = asyncio.run(llm.ask_llm_prompt(llm.LLM_TYPE.GEMMA3,system_prompt_arima,False))
-    # print(response)
+    # logger.info(response)

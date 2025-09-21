@@ -1,6 +1,7 @@
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 from dataprovider import Dataprovider
+from loguru import logger # type: ignore
 
 class Settings:
     def __init__(self):
@@ -24,15 +25,15 @@ class Settings:
     
     def update_aktien(self,aktien):
         self.aktien = aktien
-        print(self.aktien)
+        logger.info(self.aktien)
 
     def update_dates(self):
         self.end_date = datetime.strptime(self.end_date_str, "%Y-%m-%d")
         self.start_date = self.end_date - relativedelta(months=self.timeframe)
-        print('end_date_str: ' , self.end_date_str,'end_date: ',self.end_date,'start_date: ', self.start_date,'timeframe: ', self.timeframe)
+        logger.debug(f"end_date_str: {self.end_date_str} end_date: {self.end_date} start_date: {self.start_date} timeframe: {self.timeframe}")
 
     def update_forecast_method(self):
-        print(self.forecastMethod)
+        logger.info(f"forcastMethod: {self.forecastMethod}")
         self.useArima = (self.forecastMethod == 0)
         self.useSentiment = (self.forecastMethod == 1)
         self.useCombined = (self.forecastMethod == 2)

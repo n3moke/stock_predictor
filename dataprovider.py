@@ -6,6 +6,7 @@ import pandas as pd
 import yfinance as yf
 from nicegui import ui, background_tasks
 import json
+from loguru import logger # type: ignore
 
 class Dataprovider:
     class NEWSTYPE(Enum):
@@ -29,7 +30,7 @@ class Dataprovider:
     
     def fetch_news_single_ticker(self, aktie:str ,newscount:int, start_date: datetime,  end_date: datetime, news_type: NEWSTYPE ) -> list[dict]:
         ticker = yf.Ticker(aktie)
-        print('news type: ', news_type.value)
+        logger.info(f"news type: {news_type.value}")
         news = ticker.get_news(count=newscount,tab=news_type.value)
         filtered_news:pd.DataFrame = self.filter_news_daterange(news, start_date,end_date)
         return filtered_news
@@ -40,22 +41,21 @@ class Dataprovider:
         filtered_news = []
         for article in news:
             pubdate = datetime.fromisoformat(article['content']['pubDate'].replace('Z', '+00:00'))
-            #print(pubdate)
             if (start <= pubdate <= end):
                 filtered_news.append(article)
-                #print("added")
+                logger.trace("added article")
         return filtered_news
 
-    def prepare_news_sentiment(self, news: list[dict], print_log:bool = True) -> pd.DataFrame:
+    def prepare_news_sentiment(self, news: list[dict]) -> pd.DataFrame:
         # put only summary and pubdate into a pandas dataframe
         df = pd.DataFrame([
             { 'pubDate': article['content']['pubDate'], 'summary' : article['content']['summary']}
             for article in news
         ])
-        if print_log : print(df)
+        logger.debug(df)
         return df
 
-    def prepare_stock_data_arima(self, data: pd.DataFrame, print_log:bool = True) -> str:
+    def prepare_stock_data_arima(self, data: pd.DataFrame) -> str:
         #round column Close to 3 decimal places
         data['Close'] = data['Close'].round(3)
         data.columns = [f"{col}" for col in data.columns]
@@ -63,27 +63,26 @@ class Dataprovider:
         data.insert(0, 'Date', data.index.strftime('%Y-%m-%d'))
         data.columns = ['Date', 'Close']
         csv = data.to_csv(index=False)
-        if print_log : print(csv)
+        logger.debug(f"prepared csv: \n {csv}")
         return csv
     
-    def prepare_sentiment_combined_forecast(self,data:pd.DataFrame,  print_log:bool = True) -> str:
+    def prepare_sentiment_combined_forecast(self,data:pd.DataFrame) -> str:
         #drop summary column
         data.drop('summary', axis=1, inplace=True)
         csv = data.to_csv(index=False)
-        if print_log : print(csv)
+        logger.debug(f"prepared csv: \n {csv}")
         return csv
 
 
     def create_table_multiple_stocks(self, aktien:list[str]) -> ui.table:
         self.aktien_list = []
         if not aktien:
-            print("No stock selected. Returning empty table")
+            logger.warning("No stock selected. Returning empty table")
             return ui.table()
         else:
             for aktie in aktien:
                 self.aktien_list.append(aktie['aktie'])
-            print('printing aktien_list')
-            print(self.aktien_list)
+            logger.debug(f"printing aktien_list: \n {self.aktien_list}")
             df = self.fetch_historical_stock_data(self.aktien_list)
 
             df.columns = [f"{col}" for col in df.columns]
@@ -100,20 +99,19 @@ class Dataprovider:
             return ui.table(columns=columns, rows=table_data, row_key='Date',pagination={'rowsPerPage': 10})
     
     def create_table_single_stock(self, aktien:list[str], end_date: datetime, start_date:datetime) -> ui.table:
-        print('End Date: ',end_date,' Start Date: ', start_date)
+        logger.info(f"End Date: {end_date} Start Date: {start_date}")
         self.aktien_list = []
         if not aktien:
-            print("No stock selected. Returning empty table")
+            logger.warning("No stock selected. Returning empty table")
             return None
         else:
             for aktie in aktien:
                 self.aktien_list.append(aktie['aktie'])
-            print('printing aktien_list')
-            print(self.aktien_list)
+            logger.debug(f"printing aktien_list: \n {self.aktien_list}")
             df = self.fetch_historical_stock_data(self.aktien_list[0], end_date, start_date)
 
             df.columns = [f"{col}" for col in df.columns]
-            print(df.columns)
+            logger.trace(df.columns)
             df.rename(columns={ df.columns[0]: "Close" }, inplace = True)
             #df.columns = df.columns.to_flat_index()
             df.insert(0, 'Date', df.index.strftime('%Y-%m-%d'))
@@ -125,75 +123,50 @@ class Dataprovider:
 
             # Spaltennamen für NiceGUI-Table
             columns = [{'name': col, 'label': col, 'field': col} for col in df.columns]
-            print(columns)
+            logger.trace(columns)
             #columns = [['Date', 'Close']]
 
             # NiceGUI Table anzeigen
             return ui.table(columns=columns, rows=table_data, row_key='Date',pagination={'rowsPerPage': 10})
 
     def get_pandas_single_stock(self, aktien:list[str], end_date: datetime, start_date:datetime) -> pd.DataFrame:
-        print('End Date: ',end_date,' Start Date: ', start_date)
+        logger.info(f"End Date: {end_date} Start Date: {start_date}")
         self.aktien_list = []
         if not aktien:
-            print("No stock selected. Returning empty table")
+            logger.warning("No stock selected. Returning empty table")
             return None
         else:
             for aktie in aktien:
                 self.aktien_list.append(aktie['aktie'])
-            print('printing aktien_list')
-            print(self.aktien_list)
+            logger.debug(f"printing aktien_list: \n {self.aktien_list}")
             df = self.fetch_historical_stock_data(self.aktien_list[0], end_date, start_date)
 
             df.columns = [f"{col}" for col in df.columns]
-            print(df.columns)
+            logger.trace(df.columns)
             df.rename(columns={ df.columns[0]: "Close" }, inplace = True)
-            # df.columns = df.columns.to_flat_index()
             df.insert(0, 'Date', df.index.strftime('%Y-%m-%d'))
-            #df = df.rename(columns={ df.columns[1]: "Close" }, inplace = True)
             df['Close'] = df['Close'].round(3)
-            #df.round(2)
-            # DataFrame als Liste von Dictionaries für NiceGUI (Table) konvertieren
-            # table_data = df.to_dict('records')
-
-            # # Spaltennamen für NiceGUI-Table
-            # columns = [{'name': col, 'label': col, 'field': col} for col in df.columns]
-            # print(columns)
-            # #columns = [['Date', 'Close']]
-            # print(df)
-            # NiceGUI Table anzeigen
             return df
         
 
     def get_pandas_single_stock_table(self, aktien:list[str], end_date: datetime, start_date:datetime) -> ui.table:
-        print('End Date: ',end_date,' Start Date: ', start_date)
+        logger.info(f"End Date: {end_date} Start Date: {start_date}")
         self.aktien_list = []
         if not aktien:
-            print("No stock selected. Returning empty table")
+            logger.warning("No stock selected. Returning empty table")
             return None
         else:
             for aktie in aktien:
                 self.aktien_list.append(aktie['aktie'])
-            print('printing aktien_list')
-            print(self.aktien_list)
+            logger.debug(f"printing aktien_list: \n {self.aktien_list}")
             df = self.fetch_historical_stock_data(self.aktien_list[0], end_date, start_date)
 
             df.columns = [f"{col}" for col in df.columns]
-            print(df.columns)
+            logger.trace(df.columns)
             df.rename(columns={ df.columns[0]: "Close" }, inplace = True)
-            # df.columns = df.columns.to_flat_index()
             df.insert(0, 'Date', df.index.strftime('%Y-%m-%d'))
-            #df = df.rename(columns={ df.columns[1]: "Close" }, inplace = True)
             df['Close'] = df['Close'].round(3)
-            #df.round(2)
-            # DataFrame als Liste von Dictionaries für NiceGUI (Table) konvertieren
-            # table_data = df.to_dict('records')
-
-            # # Spaltennamen für NiceGUI-Table
-            # columns = [{'name': col, 'label': col, 'field': col} for col in df.columns]
-            # print(columns)
-            # #columns = [['Date', 'Close']]
-            print(df)
-            # NiceGUI Table anzeigen
+            logger.debug(df)
             return ui.table.from_pandas(df)
 
 if __name__ == '__main__':
