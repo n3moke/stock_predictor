@@ -15,14 +15,14 @@ class Dataprovider:
         NEWS:str = 'news'
 
     def __init__(self):
-        self.aktien_list: list[str] = []
+        self.stocks_list: list[str] = []
         self.stock_table_data: pd.DataFrame = pd.DataFrame({'Date': [''],'Close': ['']})
     def __call__(self, aktien:list[str]):
         self.aktien = aktien
 
     def load_stocks(self):
         with open('stocklist.json', 'r') as file:
-            self.aktien_list = json.load(file)
+            self.stocks_list = json.load(file)
 
     def fetch_historical_stock_data(self,aktien:str, end_date: datetime, start_date:datetime) -> pd.DataFrame:
         return yf.download(aktien, start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d'))[['Close']]
@@ -75,15 +75,15 @@ class Dataprovider:
 
 
     def create_table_multiple_stocks(self, aktien:list[str]) -> ui.table:
-        self.aktien_list = []
+        self.stocks_list = []
         if not aktien:
             logger.warning("No stock selected. Returning empty table")
             return ui.table()
         else:
             for aktie in aktien:
-                self.aktien_list.append(aktie['aktie'])
-            logger.debug(f"printing aktien_list: \n {self.aktien_list}")
-            df = self.fetch_historical_stock_data(self.aktien_list)
+                self.stocks_list.append(aktie['aktie'])
+            logger.debug(f"printing stocks_list: \n {self.stocks_list}")
+            df = self.fetch_historical_stock_data(self.stocks_list)
 
             df.columns = [f"{col}" for col in df.columns]
             #df.columns = df.columns.to_flat_index()
@@ -100,15 +100,15 @@ class Dataprovider:
     
     def create_table_single_stock(self, aktien:list[str], end_date: datetime, start_date:datetime) -> ui.table:
         logger.info(f"End Date: {end_date} Start Date: {start_date}")
-        self.aktien_list = []
+        self.stocks_list = []
         if not aktien:
             logger.warning("No stock selected. Returning empty table")
             return None
         else:
             for aktie in aktien:
-                self.aktien_list.append(aktie['aktie'])
-            logger.debug(f"printing aktien_list: \n {self.aktien_list}")
-            df = self.fetch_historical_stock_data(self.aktien_list[0], end_date, start_date)
+                self.stocks_list.append(aktie['stock'])
+            logger.debug(f"printing stocks_list: \n {self.stocks_list}")
+            df = self.fetch_historical_stock_data(self.stocks_list[0], end_date, start_date)
 
             df.columns = [f"{col}" for col in df.columns]
             logger.trace(df.columns)
@@ -131,15 +131,15 @@ class Dataprovider:
 
     def get_pandas_single_stock(self, aktien:list[str], end_date: datetime, start_date:datetime) -> pd.DataFrame:
         logger.info(f"End Date: {end_date} Start Date: {start_date}")
-        self.aktien_list = []
+        self.stocks_list = []
         if not aktien:
             logger.warning("No stock selected. Returning empty table")
             return None
         else:
             for aktie in aktien:
-                self.aktien_list.append(aktie['aktie'])
-            logger.debug(f"printing aktien_list: \n {self.aktien_list}")
-            df = self.fetch_historical_stock_data(self.aktien_list[0], end_date, start_date)
+                self.stocks_list.append(aktie['stock'])
+            logger.debug(f"printing stocks_list: \n {self.stocks_list}")
+            df = self.fetch_historical_stock_data(self.stocks_list[0], end_date, start_date)
 
             df.columns = [f"{col}" for col in df.columns]
             logger.trace(df.columns)
@@ -151,15 +151,15 @@ class Dataprovider:
 
     def get_pandas_single_stock_table(self, aktien:list[str], end_date: datetime, start_date:datetime) -> ui.table:
         logger.info(f"End Date: {end_date} Start Date: {start_date}")
-        self.aktien_list = []
+        self.stocks_list = []
         if not aktien:
             logger.warning("No stock selected. Returning empty table")
             return None
         else:
             for aktie in aktien:
-                self.aktien_list.append(aktie['aktie'])
-            logger.debug(f"printing aktien_list: \n {self.aktien_list}")
-            df = self.fetch_historical_stock_data(self.aktien_list[0], end_date, start_date)
+                self.stocks_list.append(aktie['stock'])
+            logger.debug(f"printing stocks_list: \n {self.stocks_list}")
+            df = self.fetch_historical_stock_data(self.stocks_list[0], end_date, start_date)
 
             df.columns = [f"{col}" for col in df.columns]
             logger.trace(df.columns)

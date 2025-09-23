@@ -7,10 +7,7 @@ class Settings:
     def __init__(self):
         self.timeframe: int = 1
         self.end_date_str = '2025-08-31'
-        self.arima = True
-        self.lstm = True
-        self.aktien = []
-        self.aktien_list = []
+        self.stocks = []
         self.end_date = datetime.strptime(self.end_date_str, "%Y-%m-%d")
         self.start_date = self.end_date - relativedelta(months=self.timeframe)
         self.forecastMethod: int = 0
@@ -19,13 +16,10 @@ class Settings:
         self.useCombined: bool = False
         self.newsTypeInteger: int = 0
         self.newsType: Dataprovider.NEWSTYPE = Dataprovider.NEWSTYPE.PRESS
-
-    def __call__(self, aktien):
-        self.aktien = aktien
     
-    def update_aktien(self,aktien):
-        self.aktien = aktien
-        logger.info(self.aktien)
+    def update_stocks(self,stocks):
+        self.stocks = stocks
+        logger.info(self.stocks)
 
     def update_dates(self):
         self.end_date = datetime.strptime(self.end_date_str, "%Y-%m-%d")

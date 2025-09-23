@@ -174,14 +174,14 @@ Important! I want you to compute the forecast. I don't want python code!!!
         self.numberOfSentiments = 0 
 
     @measure_time
-    async def get_sentiment_respone(self,llm_type: LLM_TYPE, aktien:list[str],start_date: datetime, end_date: datetime,newsType: Dataprovider.NEWSTYPE) -> pd.DataFrame:
-        if not aktien:
+    async def get_sentiment_respone(self,llm_type: LLM_TYPE, stocks:list[str],start_date: datetime, end_date: datetime,newsType: Dataprovider.NEWSTYPE) -> pd.DataFrame:
+        if not stocks:
             logger.warning("No stock was selected.")
             ui.notify('Please a stock first.')
             return self.sentiment_response
         else:
-            stock = aktien[0]['aktie']
-            stockName = aktien[0]['name']
+            stock = stocks[0]['stock']
+            stockName = stocks[0]['name']
             logger.info(f"starting sentiment analysis of stock {stock}", )
             self.isSentimentRunning = True
             logger.debug(stock)
@@ -197,25 +197,25 @@ Important! I want you to compute the forecast. I don't want python code!!!
             # Strip time, keep only date
             sentiment_analysis['pubDate'] = sentiment_analysis['pubDate'].dt.date
             logger.info(f"printing sentiment analysis result \n {sentiment_analysis}")
-            self.save_response_as_csv(aktien[0]['aktie'],sentiment_analysis,'sentiment')
+            self.save_response_as_csv(stocks[0]['stock'],sentiment_analysis,'sentiment')
             return sentiment_analysis
     
     @measure_time
-    async def get_arima_response(self,llm_type: LLM_TYPE, aktien:list[str],start_date: datetime, end_date: datetime) -> pd.DataFrame:
-        if not aktien:
+    async def get_arima_response(self,llm_type: LLM_TYPE, stocks:list[str],start_date: datetime, end_date: datetime) -> pd.DataFrame:
+        if not stocks:
             logger.warning("No stock was selected.")
             ui.notify('Please a stock first.')
             return self.arima_response
         else:
             self.isArimaRunning = True
-            stock = aktien[0]['aktie']
+            stock = stocks[0]['stock']
             logger.debug(stock)
             logger.debug(f"From {start_date} to {end_date}")
 
             stockData = self.dp.fetch_historical_stock_data(stock, end_date, start_date)
             stockData = self.dp.prepare_stock_data_arima(stockData)
 
-            prompt = self.format_arima_prompt(stockData,start_date,end_date,10,aktien)
+            prompt = self.format_arima_prompt(stockData,start_date,end_date,10,stocks)
             logger.debug(f"prompt: \n {prompt}")
             response = await self.ask_llm_prompt(llm_type,prompt)
             self.isArimaRunning = False
@@ -225,15 +225,15 @@ Important! I want you to compute the forecast. I don't want python code!!!
             return response
 
     @measure_time   
-    async def get_combined_response(self,llm_type: LLM_TYPE, aktien:list[str],start_date: datetime, end_date: datetime, newsType: Dataprovider.NEWSTYPE) -> pd.DataFrame:
-        if not aktien:
+    async def get_combined_response(self,llm_type: LLM_TYPE, stocks:list[str],start_date: datetime, end_date: datetime, newsType: Dataprovider.NEWSTYPE) -> pd.DataFrame:
+        if not stocks:
             logger.warning("No stock was selected.")
             ui.notify('Please a stock first.')
             return self.arima_response
         else:
             self.isCombinedRunning = True
-            stock = aktien[0]['aktie']
-            stockName = aktien[0]['name']
+            stock = stocks[0]['stock']
+            stockName = stocks[0]['name']
 
             #First do sentiment analysis
             news = self.dp.fetch_news_single_ticker(stock, 200,start_date, end_date, newsType)
@@ -257,7 +257,7 @@ Important! I want you to compute the forecast. I don't want python code!!!
             stock_csv = self.dp.prepare_stock_data_arima(stockData)
 
             #prepare prompt
-            prompt = self.format_combined_prompt(sentiment_csv,stock_csv,start_date,end_date,10,aktien)
+            prompt = self.format_combined_prompt(sentiment_csv,stock_csv,start_date,end_date,10,stocks)
             logger.debug(f"formatted prompt: \n {prompt}")            
             response = await self.ask_llm_prompt(llm_type,prompt)
             
@@ -286,7 +286,6 @@ Important! I want you to compute the forecast. I don't want python code!!!
             match_sentiment = re.search(prediction_pattern, response)
             extracted_csv = match_sentiment.group(1) if match_sentiment else None
             logger.info(f"extracted csv: \n{extracted_csv}")
-            #print('Regex result: ', extracted_csv)
             #extract text between ### and ### or '''
             # reasoning_pattern = r"@@@([\s\S]*?)(?=```|###|@@@)"
             # match_reasoning = re.search(reasoning_pattern, response)
@@ -294,7 +293,6 @@ Important! I want you to compute the forecast. I don't want python code!!!
             combined_result = pd.read_csv(StringIO(extracted_csv))
             self.combined_response = combined_result
             # self.combined_reasoning = extracted_reasoning
-            #print(self.combined_response, '\n\n', self.combined_reasoning)
             logger.info(combined_result)
             return combined_result
 
@@ -306,9 +304,9 @@ Important! I want you to compute the forecast. I don't want python code!!!
         return ui.table(columns=columns, rows=table_data, row_key='Date',pagination={'rowsPerPage': 10})
 
 
-    def get_sentiment_analysis_results(self,llm_tpye: LLM_TYPE, aktien:list[str]):
-        stock = aktien[0]['aktie']
-        stockName = aktien[0]['name']
+    def get_sentiment_analysis_results(self,llm_tpye: LLM_TYPE, stocks:list[str]):
+        stock = stocks[0]['stock']
+        stockName = stocks[0]['name']
         news = self.dp.fetch_news_single_ticker(stock, 10,datetime(2020, 5, 17), datetime(2020, 5, 17), self.dp.NEWSTYPE.PRESS)
         news = self.dp.prepare_news_sentiment(news)
         sentiment_analysis = self._process_articles(llm_tpye, news, stockName)
@@ -318,14 +316,14 @@ Important! I want you to compute the forecast. I don't want python code!!!
     def format_arima_prompt(self, csv: str,start_date:datetime, end_date:datetime, forcastrange: int, company : list[str]) -> str:
         daystring_format = "%d %B %Y"
         day_format = "%Y-%m-%d"
-        prompt = self.arima_prompt_text.format(companyName=company[0]['aktie'], companyStockName=company[0]['name'], stock=csv,start_date=start_date.strftime(day_format) ,end_date=end_date.strftime(day_format), startDayStr=start_date.strftime(daystring_format), endDayStr=end_date.strftime(daystring_format),forcastRangeString=forcastrange)
+        prompt = self.arima_prompt_text.format(companyName=company[0]['stock'], companyStockName=company[0]['name'], stock=csv,start_date=start_date.strftime(day_format) ,end_date=end_date.strftime(day_format), startDayStr=start_date.strftime(daystring_format), endDayStr=end_date.strftime(daystring_format),forcastRangeString=forcastrange)
         return prompt
     
     def format_combined_prompt(self, stock_csv: str,sentiment_csv :str,start_date:datetime, end_date:datetime, forcastrange: int, company : list[str]) -> str:
         daystring_format = "%d %B %Y"
         day_format = "%Y-%m-%d"
         forecast_Range_String = self.generate_forecastRange_string(forcastrange, end_date)
-        prompt = self.combined_prompt_text.format(companyName=company[0]['aktie'], companyStockName=company[0]['name'],sentiment_csv=sentiment_csv, stock_csv=stock_csv, start_date=start_date.strftime(day_format), end_date=end_date.strftime(day_format), startDayStr=start_date.strftime(daystring_format), endDayStr=end_date.strftime(daystring_format),forcastRangeString=forecast_Range_String, forcastDayRange=forcastrange)
+        prompt = self.combined_prompt_text.format(companyName=company[0]['stock'], companyStockName=company[0]['name'],sentiment_csv=sentiment_csv, stock_csv=stock_csv, start_date=start_date.strftime(day_format), end_date=end_date.strftime(day_format), startDayStr=start_date.strftime(daystring_format), endDayStr=end_date.strftime(daystring_format),forcastRangeString=forecast_Range_String, forcastDayRange=forcastrange)
         return prompt
     
     def generate_forecastRange_string(self,forcastrange:int, end_date:datetime):
@@ -340,7 +338,6 @@ Important! I want you to compute the forecast. I don't want python code!!!
         dir = 'results'
         os.makedirs(dir, exist_ok=True)
         timestamp = datetime.now().strftime('%Y-%d-%m-%d_%H_%M_%S')
-        # filename = f"log_{responseType}_{stock}_{timestamp}.csv"
         filename = os.path.join(dir, f"{timestamp}_log_{responseType}_{stock}.csv")
         data.to_csv(filename,index=False)
 
@@ -350,7 +347,7 @@ if __name__ == '__main__':
     dp.__call__(['AAPL'])
 
     llm = LLM()
-    stock_list = [{'name': 'Amazon', 'aktie': 'AMZN'}]
+    stock_list = [{'name': 'Amazon', 'stock': 'AMZN'}]
     ##########################################
     #########       Sentiment   ##############
     ##########################################
