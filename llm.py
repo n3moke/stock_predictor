@@ -1,5 +1,5 @@
 import asyncio
-from datetime import datetime 
+from datetime import datetime, timedelta 
 from enum import Enum
 from io import StringIO
 import os
@@ -45,7 +45,7 @@ If data for certain days are missing in the second csv, for example weekends, ex
 If date is missing for certain dates in the first csv, there are simply no news articles for that specific day.
 
 Your task is to compute a ARIMA forecast with the given data of the second csv. 
-Your task is to combine these datasets by matching on the date column, and then compute a forecast ONLY! for the next {forcastRangeString} days after {end_date}, excluding weekends and national holidays. So your answer must only contain {forcastRangeString} rows of data!
+Your task is to combine these datasets by matching on the date column, and then compute a forecast ONLY! for the {forcastRangeString}, excluding weekends and national holidays. So your answer must only contain {forcastRangeString} rows of data!
 Use the sentiment score as an influencing factor to improve or refine the forecast.
 
 First CSV String (historical stock data):
@@ -64,7 +64,7 @@ YYYY-MM-DD,###
 Replace YYYY-MM-DD with forecasted dates and ### with the numeric predictions.
 The CSV must be inside the ```csv ``` block.
 Do not include any additional text, explanations, code, or apologetic language
-AGAIN I only want {forcastRangeString} days of forecast after {end_date}.
+Constraint: I only want {forcastRangeString} days of forecast after {end_date}. So your forcast should only contain {forcastDayRange} rows of data. Also consider some months only contain never contain more than 31 days. So an answer like 2025-08-32,181.2 is invalid.
 Important! I want you to compute the forecast. I don't want python code!!!
 
 '''
@@ -258,7 +258,7 @@ Important! I want you to compute the forecast. I don't want python code!!!
 
             #prepare prompt
             prompt = self.format_combined_prompt(sentiment_csv,stock_csv,start_date,end_date,10,aktien)
-            logger.debug("formatted prompt: \n {prompt}")            
+            logger.debug(f"formatted prompt: \n {prompt}")            
             response = await self.ask_llm_prompt(llm_type,prompt)
             
             logger.info(f"combined response: {response} \n##########################")
@@ -324,8 +324,17 @@ Important! I want you to compute the forecast. I don't want python code!!!
     def format_combined_prompt(self, stock_csv: str,sentiment_csv :str,start_date:datetime, end_date:datetime, forcastrange: int, company : list[str]) -> str:
         daystring_format = "%d %B %Y"
         day_format = "%Y-%m-%d"
-        prompt = self.combined_prompt_text.format(companyName=company[0]['aktie'], companyStockName=company[0]['name'],sentiment_csv=sentiment_csv, stock_csv=stock_csv, start_date=start_date.strftime(day_format), end_date=end_date.strftime(day_format), startDayStr=start_date.strftime(daystring_format), endDayStr=end_date.strftime(daystring_format),forcastRangeString=forcastrange)
+        forecast_Range_String = self.generate_forecastRange_string(forcastrange, end_date)
+        prompt = self.combined_prompt_text.format(companyName=company[0]['aktie'], companyStockName=company[0]['name'],sentiment_csv=sentiment_csv, stock_csv=stock_csv, start_date=start_date.strftime(day_format), end_date=end_date.strftime(day_format), startDayStr=start_date.strftime(daystring_format), endDayStr=end_date.strftime(daystring_format),forcastRangeString=forecast_Range_String, forcastDayRange=forcastrange)
         return prompt
+    
+    def generate_forecastRange_string(self,forcastrange:int, end_date:datetime):
+        #example string  2025-08-16 to 2025-08-18
+        end_date_plusOne = end_date + timedelta(days=1)
+        end_date_total = end_date + timedelta(days=forcastrange+1)
+        forcastrangeString = f"{end_date_plusOne} to {end_date_total}"
+        logger.debug(f"forcastrangeString: {forcastrangeString}")
+        return forcastrangeString
     
     def save_response_as_csv(self, stock :str , data: pd.DataFrame, responseType: str):
         dir = 'results'
