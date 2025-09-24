@@ -30,9 +30,10 @@ The column "Date" represents the date. It is in the following formart: 2022-01-0
 The column "Close" represents the closing price of the stock of that day and is in USD.
 Important! The data covers the period from {startDayStr} ({start_date}) to {endDayStr} ({end_date}).
 If data for certain days are missing, for example weekends, exclude them.
-Provide me with the forecast for the next {forcastRangeString} after {end_date}, excluding weekends and national holidays.
+Provide me with the forecast for the {forcastRangeString}, excluding weekends and national holidays.
 Just anwser with the forcast in a .csv format with "date" and "prediction" column.
-Important! I want you to compute the forecast. I don't want python code!!!'''
+Important! I want you to compute the forecast. I don't want python code!!!
+Constraint: I only want {forcastDayRange} days of forecast after {end_date}. So your forcast should not contain more than {forcastDayRange} rows of data.'''
         self.combined_prompt_text = '''You are given two CSV strings with information about {companyName} and its stock {companyStockName}. Each contains date-indexed data:
 First CSV: Has two columns, date and close price for the {companyName} share, i.e. {companyStockName}.
 The column "Date" represents the date. It is in the following formart: 2022-01-03 is for example the 3rd of January of 2022.
@@ -42,11 +43,11 @@ The column "pubDate" represents the date. It is in the following formart: 2022-0
 The column "Sentiment Score" represents the sentiment score of the news article for the date. It ranges from -1 (very negative) to 1 (very positive) where 0 indicates neutral sentiment
 
 Important! The data covers the period from {startDayStr} ({start_date}) to {endDayStr} ({end_date}).
-If data for certain days are missing in the second csv, for example weekends, exclude them.
-If date is missing for certain dates in the first csv, there are simply no news articles for that specific day.
+If data for certain days are missing in the first csv, for example weekends, exclude them.
+If date is missing for certain dates in the second csv, there are simply no news articles for that specific day.
 
-Your task is to compute a ARIMA forecast with the given data of the second csv. 
-Your task is to combine these datasets by matching on the date column, and then compute a forecast ONLY! for the {forcastRangeString}, excluding weekends and national holidays. So your answer must only contain {forcastRangeString} rows of data!
+Your task is to compute a ARIMA forecast with the given data of the first csv. 
+Your task is to combine these datasets by matching on the date column, and then compute a forecast ONLY! for the {forcastRangeString}, excluding weekends and national holidays. So your forcast should not contain more than {forcastRangeString} rows of data!
 Use the sentiment score as an influencing factor to improve or refine the forecast.
 
 First CSV String (historical stock data):
@@ -54,7 +55,7 @@ First CSV String (historical stock data):
 Second CSV (Sentiment):
 {stock_csv}
 
-Return the result as a CSV string with two columns: date, prediction.
+Return the result of the ARIMA forecast of the closing price as a CSV string with two columns: date, prediction.
 ```csv
 date,prediction
 YYYY-MM-DD,###
@@ -62,36 +63,13 @@ YYYY-MM-DD,###
 YYYY-MM-DD,###
 ```
 
-Replace YYYY-MM-DD with forecasted dates and ### with the numeric predictions.
+Replace YYYY-MM-DD with forecasted dates and ### with the numeric predictions of the closing price.
 The CSV must be inside the ```csv ``` block.
 Do not include any additional text, explanations, code, or apologetic language
-Constraint: I only want {forcastRangeString} days of forecast after {end_date}. So your forcast should only contain {forcastDayRange} rows of data. Also consider some months only contain never contain more than 31 days. So an answer like 2025-08-32,181.2 is invalid.
+Constraint: I only want {forcastDayRange} days of forecast after {end_date}. So your forcast should only contain {forcastDayRange} rows of data. Also consider some months only contain never contain more than 31 days.
 Important! I want you to compute the forecast. I don't want python code!!!
 
 '''
-#  Also add a short summary how the sentiment scores influenced the prediction in the following format.
-
-# @@@
-# <Insert 1-2 sentence summary interpreting the forecast, referencing any relevant data factors, in plain language. Do not reference yourself or the format.>
-# @@@
-# , with the summary below as plain text inside two ### lines.
-
-# Return the result as a CSV string with two columns: date, prediction. Also add a short summary how the sentiment scores influenced the prediction in the following format.
-# Wrap it in $$$ csv at the beginning AND $$$ at the end!!!. After the prediction show me how the sentiment score influenced the prediction. Wrap this in ### at the beginning AND!!! ### at the end. Here is an example answer:
-# $$$csv
-# date,prediction
-# 2025-08-31,178.5
-# 2025-09-01,179.2
-# 2025-09-02,180.1
-# 2025-09-04,181.5
-# $$$
-# ###
-# Throughout the forecast, the sentiment scores played a stabilizing role.
-# ###
-
-
-# Important! I want the prediction as csv AND The 
-#As extra after the wrapped csv show me how the sentiment score influenced the prediction. Wrap this in ###
  
         self.response_text: str = ''
         self.sentiment_response = pd.DataFrame({'pubDate': [''],'summary': [''],'Sentiment Score': [0]})
@@ -316,7 +294,8 @@ Important! I want you to compute the forecast. I don't want python code!!!
     def format_arima_prompt(self, csv: str,start_date:datetime, end_date:datetime, forcastrange: int, company : list[str]) -> str:
         daystring_format = "%d %B %Y"
         day_format = "%Y-%m-%d"
-        prompt = self.arima_prompt_text.format(companyName=company[0]['stock'], companyStockName=company[0]['name'], stock=csv,start_date=start_date.strftime(day_format) ,end_date=end_date.strftime(day_format), startDayStr=start_date.strftime(daystring_format), endDayStr=end_date.strftime(daystring_format),forcastRangeString=forcastrange)
+        forecast_Range_String = self.generate_forecastRange_string(forcastrange, end_date)
+        prompt = self.arima_prompt_text.format(companyName=company[0]['stock'], companyStockName=company[0]['name'], stock=csv,start_date=start_date.strftime(day_format) ,end_date=end_date.strftime(day_format), startDayStr=start_date.strftime(daystring_format), endDayStr=end_date.strftime(daystring_format),forcastRangeString=forecast_Range_String,forcastDayRange=forcastrange)
         return prompt
     
     def format_combined_prompt(self, stock_csv: str,sentiment_csv :str,start_date:datetime, end_date:datetime, forcastrange: int, company : list[str]) -> str:
@@ -329,8 +308,9 @@ Important! I want you to compute the forecast. I don't want python code!!!
     def generate_forecastRange_string(self,forcastrange:int, end_date:datetime):
         #example string  2025-08-16 to 2025-08-18
         end_date_plusOne = end_date + timedelta(days=1)
-        end_date_total = end_date + timedelta(days=forcastrange+1)
-        forcastrangeString = f"{end_date_plusOne} to {end_date_total}"
+        end_date_total = end_date + timedelta(days=forcastrange)
+        day_format = "%Y-%m-%d"
+        forcastrangeString = f"{end_date_plusOne.strftime(day_format)} to {end_date_total.strftime(day_format)}"
         logger.debug(f"forcastrangeString: {forcastrangeString}")
         return forcastrangeString
     
