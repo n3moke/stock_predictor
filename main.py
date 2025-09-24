@@ -86,26 +86,25 @@ with ui.tab_panels(tabs, value=one).classes('w-full'):
             ui.toggle({0:'Press Releases', 1:'News',2: 'All'},on_change=settings.update_newsType).bind_value(settings,'newsTypeInteger')
             ui.textarea(label='Text', placeholder='start typing').bind_value(llm, 'combined_prompt_text').classes('w-full').props('autogrow input-style="min-height: 300px"')
             ui.button('Do combined forecast', on_click=lambda:  do_combined_forecast()).tooltip('A arima is done with the given timeframe selected in the first tab. In addition a sentiment analysis is done with press releases of the selected company and the given timeframe. The accuracy befenits normally from a longer timeframe.')       
+            combined_progressbar = ui.linear_progress(value=0).props('instant-feedback').bind_visibility(llm,'isSentimentRunning').bind_value(llm, 'sentimentProgess')
+            combined_progressbar.visible = False
             ui.spinner('dots', size='lg', color='red').bind_visibility(llm, 'isArimaRunning')
      
         def do_sentiment_analysis():
+            if checkStockIsSelected(): background_tasks.create(llm.get_sentiment_respone(llm.LLM_TYPE.GEMMA3,settings.stocks,settings.start_date, settings.end_date, settings.newsType))
+
+        def do_arima_forecast():
+            if checkStockIsSelected(): background_tasks.create(llm.get_arima_response(llm.LLM_TYPE.GEMMA3,settings.stocks,settings.start_date, settings.end_date))
+
+        def do_combined_forecast():
+            if checkStockIsSelected(): background_tasks.create(llm.get_combined_response(llm.LLM_TYPE.GEMMA3,settings.stocks,settings.start_date, settings.end_date,settings.newsType))
+        
+        def checkStockIsSelected() -> bool :
             if not settings.stocks:
                 logger.warning('No stock was selected while trying to start a sentiment analysis')
                 ui.notify('Please select a in tab 1 stock first!')
-            else:
-                background_tasks.create(llm.get_sentiment_respone(llm.LLM_TYPE.GEMMA3,settings.stocks,settings.start_date, settings.end_date, settings.newsType))
-
-        def do_arima_forecast():
-            if not settings.stocks:
-                ui.notify('Please select a in tab 1 stock first!')
-            else:
-                background_tasks.create(llm.get_arima_response(llm.LLM_TYPE.GEMMA3,settings.stocks,settings.start_date, settings.end_date))
-
-        def do_combined_forecast():
-            if not settings.stocks:
-                ui.notify('Please select a in tab 1 stock first!')
-            else:
-                background_tasks.create(llm.get_combined_response(llm.LLM_TYPE.GEMMA3,settings.stocks,settings.start_date, settings.end_date,settings.newsType))
+                return False
+            return True
             
     with ui.tab_panel(four):
         ui.label('Prediction')
@@ -123,7 +122,7 @@ with ui.tab_panels(tabs, value=one).classes('w-full'):
         with ui.card().bind_visibility(settings,'useCombined').classes('w-full') as combined_result_card:
             combined_table_container = ui.column()
             with combined_table_container as combined_parent_container:
-                ui.table.from_pandas(llm.sentiment_response)
+                ui.table.from_pandas(llm.combined_response)
 
         ui.button('Load Result', on_click=lambda _: display_predictions())
 
@@ -156,25 +155,6 @@ with ui.tab_panels(tabs, value=one).classes('w-full'):
                 ui.table.from_pandas(llm.combined_response, title=sent_table_title, pagination={'rowsPerPage': 10}).classes('w-full')
                 ui.label("Reasoning").bind_text_from(llm, 'combined_reasoning')
 
-                ui.highchart(
-                    {
-                        'title': False,
-                        'plotOptions': {
-                            'series': {
-                                'stickyTracking': False,
-                                'dragDrop': {'draggableY': True, 'dragPrecisionY': 1},
-                            },
-                        },
-                        'series': [
-                            {'name': 'A', 'data': [[20, 10], [30, 20], [40, 30]]},
-                            {'name': 'B', 'data': [[50, 40], [60, 50], [70, 60]]},
-                        ],
-                    },
-                    extras=['draggable-points'],
-                    on_point_click=lambda e: ui.notify(f'Click: {e}'),
-                    on_point_drag_start=lambda e: ui.notify(f'Drag start: {e}'),
-                    on_point_drop=lambda e: ui.notify(f'Drop: {e}')
-                ).classes('w-full h-64')
 
 #ui.run()
 ui.run(native=True,window_size=(1600, 900))

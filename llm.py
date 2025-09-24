@@ -16,6 +16,7 @@ import yfinance as yf
 from dataprovider import Dataprovider
 from util.perf import measure_time
 
+
 class LLM:
     def __init__(self):
         self.sentiment_prompt_text = '''You will be provided with press realeases about {company}. Please rate the press release on a scale of -1 (very negative) to 1 (very positive) where 0 indicates neutral sentiment. Try to analyse the financial implications and their impact on the share price. Report the scores in increments of 0.1.
@@ -101,7 +102,6 @@ Important! I want you to compute the forecast. I don't want python code!!!
         self.numberOfSentiments:int = 0 
         self.arima_response = pd.DataFrame({'date': [''],'prediction': ['']})
         self.isArimaRunning:bool = False
-        self.isCombinedRunning:bool = False
         self.combined_response = pd.DataFrame({'date': [''],'prediction': ['']})
         self.combined_reasoning: str = ''
 
@@ -163,15 +163,15 @@ Important! I want you to compute the forecast. I don't want python code!!!
         logger.debug(type(sentiments))
         news['Sentiment Score'] = sentiments
         self.sentiment_response = news
-        self._resetSentiment()
-        
+        self._resetProgessIndicators()
         return news
 
-    def _resetSentiment(self):
+    def _resetProgessIndicators(self):
         self.isSentimentRunning = False
         self.sentimentProgess = 0
         self.current_sentiment_number = 0
         self.numberOfSentiments = 0 
+        self.isArimaRunning = False
 
     @measure_time
     async def get_sentiment_respone(self,llm_type: LLM_TYPE, stocks:list[str],start_date: datetime, end_date: datetime,newsType: Dataprovider.NEWSTYPE) -> pd.DataFrame:
@@ -197,7 +197,7 @@ Important! I want you to compute the forecast. I don't want python code!!!
             # Strip time, keep only date
             sentiment_analysis['pubDate'] = sentiment_analysis['pubDate'].dt.date
             logger.info(f"printing sentiment analysis result \n {sentiment_analysis}")
-            self.save_response_as_csv(stocks[0]['stock'],sentiment_analysis,'sentiment')
+            self.save_response_as_csv(stock,sentiment_analysis,'sentiment')
             return sentiment_analysis
     
     @measure_time
@@ -218,7 +218,7 @@ Important! I want you to compute the forecast. I don't want python code!!!
             prompt = self.format_arima_prompt(stockData,start_date,end_date,10,stocks)
             logger.debug(f"prompt: \n {prompt}")
             response = await self.ask_llm_prompt(llm_type,prompt)
-            self.isArimaRunning = False
+            self._resetProgessIndicators()
             logger.info(response)
             arima_response = self._process_and_set_arima_response(response)
             self.save_response_as_csv(stock,arima_response,'arima')
@@ -231,7 +231,7 @@ Important! I want you to compute the forecast. I don't want python code!!!
             ui.notify('Please a stock first.')
             return self.arima_response
         else:
-            self.isCombinedRunning = True
+            self.isSentimentRunning = True
             stock = stocks[0]['stock']
             stockName = stocks[0]['name']
 
@@ -265,7 +265,7 @@ Important! I want you to compute the forecast. I don't want python code!!!
             processed_response =  self._process_and_set_combined_response(response)
             #save response as csv
             self.save_response_as_csv(stock,processed_response, 'combined')
-            self.isCombinedRunning = False
+            self._resetProgessIndicators()
             return response
 
     def _process_and_set_arima_response(self, response:str) -> pd.DataFrame:
