@@ -86,11 +86,13 @@ Important! I want you to compute the forecast. I don't want python code!!!
 
     class LLM_TYPE(Enum):    
         GEMMA3:str = 'gemma3'
+        GEMMA3_27B:str = 'gemma3:27b'
         DEEPSEEK:str = 'deepseek-r1'
         DEEPSEEK70B:str = 'deepseek-r1:70b'
         GPT: str = 'gpt-oss:20b'
 
     async def _ask_llm_sentiment(self, llm_type: LLM_TYPE, input_content: str, system_prompt:str) ->  str | tuple[str, str]:
+        logger.debug(f"LLM Type: {llm_type}")
         logger.debug(f"Input content \n{input_content} \n\n  prompt \n{system_prompt} \n\n")
         response: ChatResponse = await AsyncClient().chat(model=llm_type.value, messages=[
             {'role' : 'system', 'content' : system_prompt},
@@ -119,6 +121,7 @@ Important! I want you to compute the forecast. I don't want python code!!!
 
 
     async def ask_llm_prompt(self, llm_type: LLM_TYPE, system_prompt: str) ->  str | tuple[str, str]:
+        logger.debug(f"LLM Type: {llm_type}")
         self.isArimaRunning = True
         response: ChatResponse = await AsyncClient().chat(model=llm_type.value, messages=[
             {'role': 'user','content': system_prompt}
@@ -151,7 +154,7 @@ Important! I want you to compute the forecast. I don't want python code!!!
         self.numberOfSentiments = 0 
         self.isArimaRunning = False
 
-    @measure_time
+    @measure_time(write_log=True)
     async def get_sentiment_respone(self,llm_type: LLM_TYPE, stocks:list[str],start_date: datetime, end_date: datetime,newsType: Dataprovider.NEWSTYPE) -> pd.DataFrame:
         if not stocks:
             logger.warning("No stock was selected.")
@@ -175,10 +178,10 @@ Important! I want you to compute the forecast. I don't want python code!!!
             # Strip time, keep only date
             sentiment_analysis['pubDate'] = sentiment_analysis['pubDate'].dt.date
             logger.info(f"printing sentiment analysis result \n {sentiment_analysis}")
-            self.save_response_as_csv(stock,sentiment_analysis,'sentiment')
+            self.save_response_as_csv(stock,sentiment_analysis,'sentiment', llm_type)
             return sentiment_analysis
     
-    @measure_time
+    @measure_time(write_log=True)
     async def get_arima_response(self,llm_type: LLM_TYPE, stocks:list[str],start_date: datetime, end_date: datetime) -> pd.DataFrame:
         if not stocks:
             logger.warning("No stock was selected.")
@@ -199,10 +202,10 @@ Important! I want you to compute the forecast. I don't want python code!!!
             self._resetProgessIndicators()
             logger.info(response)
             arima_response = self._process_and_set_arima_response(response)
-            self.save_response_as_csv(stock,arima_response,'arima')
+            self.save_response_as_csv(stock,arima_response,'arima', llm_type)
             return response
 
-    @measure_time   
+    @measure_time(write_log=True)   
     async def get_combined_response(self,llm_type: LLM_TYPE, stocks:list[str],start_date: datetime, end_date: datetime, newsType: Dataprovider.NEWSTYPE) -> pd.DataFrame:
         if not stocks:
             logger.warning("No stock was selected.")
@@ -242,19 +245,24 @@ Important! I want you to compute the forecast. I don't want python code!!!
             logger.info(f"combined response: {response} \n##########################")
             processed_response =  self._process_and_set_combined_response(response)
             #save response as csv
-            self.save_response_as_csv(stock,processed_response, 'combined')
+            self.save_response_as_csv(stock,processed_response, 'combined',llm_type)
             self._resetProgessIndicators()
             return response
 
     def _process_and_set_arima_response(self, response:str) -> pd.DataFrame:
-            pattern = r"```csv([\s\S]*?)```"
-            match = re.search(pattern, response)
-            extracted_csv = match.group(1) if match else None
+        pattern = r"^date,prediction(?:\r?\n\d{4}-\d{2}-\d{2},\d+(\.\d+)?)+"
+        match = re.search(pattern, response, re.MULTILINE)
+        logger.warning(match)
+        if match:
+            extracted_csv = match.group(0)
             logger.debug(f"Regex result: \n {extracted_csv}")
             arima_result = pd.read_csv(StringIO(extracted_csv))
+            logger.debug(arima_result)
             self.arima_response = arima_result
-            logger.debug(self.arima_response)
             return arima_result
+        else:
+            return None
+            
 
     def _process_and_set_combined_response(self, response) -> pd.DataFrame:
             # prediction_pattern = r"```csv([\s\S]*?)(?=```|###|@@@|[a-zA-Z])"
@@ -314,11 +322,13 @@ Important! I want you to compute the forecast. I don't want python code!!!
         logger.debug(f"forcastrangeString: {forcastrangeString}")
         return forcastrangeString
     
-    def save_response_as_csv(self, stock :str , data: pd.DataFrame, responseType: str):
+    def save_response_as_csv(self, stock :str , data: pd.DataFrame, responseType: str, llm_type: LLM_TYPE):
         dir = 'results'
         os.makedirs(dir, exist_ok=True)
         timestamp = datetime.now().strftime('%Y-%d-%m-%d_%H_%M_%S')
-        filename = os.path.join(dir, f"{timestamp}_log_{responseType}_{stock}.csv")
+        llm_string = llm_type.value.replace(":","_")
+        filename = os.path.join(dir, f"{timestamp}_log_{responseType}_{stock}_{llm_string}.csv")
+        logger.warning(f"data for csv : \n {data}" )
         data.to_csv(filename,index=False)
 
 if __name__ == '__main__': 

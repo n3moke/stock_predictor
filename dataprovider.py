@@ -21,7 +21,7 @@ class Dataprovider:
         self.aktien = aktien
 
     def load_stocks(self):
-        with open('stocklist.json', 'r') as file:
+        with open('res/stocklist.json', 'r') as file:
             self.stocks_list = json.load(file)
 
     def fetch_historical_stock_data(self,aktien:str, end_date: datetime, start_date:datetime) -> pd.DataFrame:

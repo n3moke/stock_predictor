@@ -65,8 +65,10 @@ with ui.tab_panels(tabs, value=one).classes('w-full'):
                     stock_parent_container.clear()                
                     df = dataprovider.get_pandas_single_stock(settings.stocks, settings.end_date, settings.start_date)
                     ui.table.from_pandas(df,row_key='Date',pagination={'rowsPerPage': 10},title=settings.stocks[0]['name'])
-        
     with ui.tab_panel(three):
+        ui.label('Choose LLM')
+        ui.toggle({0:'GEMMA3',1:'GEMMA3_27B', 2:'DEEPSEEK',3: 'DEEPSEEK70B',4: 'GPT-OSS:20b'},on_change=settings.update_llmType).bind_value(settings,'llmTypeInteger')
+        ui.label('Choose forecast method')
         ui.toggle({0:'ARIMA', 1:'Sentiment',2: 'ARIMA & Sentiment'},on_change=settings.update_forecast_method).bind_value(settings,'forecastMethod')
         with ui.card().bind_visibility(settings,'useArima').classes('w-full').props("autogrow") as arima_card:
             ui.textarea(label='Text', placeholder='start typing').bind_value(llm, 'arima_prompt_text').classes('w-full').props('autogrow input-style="min-height: 300px"')
@@ -91,13 +93,13 @@ with ui.tab_panels(tabs, value=one).classes('w-full'):
             ui.spinner('dots', size='lg', color='red').bind_visibility(llm, 'isArimaRunning')
      
         def do_sentiment_analysis():
-            if checkStockIsSelected(): background_tasks.create(llm.get_sentiment_respone(llm.LLM_TYPE.GEMMA3,settings.stocks,settings.start_date, settings.end_date, settings.newsType))
+            if checkStockIsSelected(): background_tasks.create(llm.get_sentiment_respone(settings.llmType,settings.stocks,settings.start_date, settings.end_date, settings.newsType))
 
         def do_arima_forecast():
-            if checkStockIsSelected(): background_tasks.create(llm.get_arima_response(llm.LLM_TYPE.GEMMA3,settings.stocks,settings.start_date, settings.end_date))
+            if checkStockIsSelected(): background_tasks.create(llm.get_arima_response(settings.llmType,settings.stocks,settings.start_date, settings.end_date))
 
         def do_combined_forecast():
-            if checkStockIsSelected(): background_tasks.create(llm.get_combined_response(llm.LLM_TYPE.GEMMA3,settings.stocks,settings.start_date, settings.end_date,settings.newsType))
+            if checkStockIsSelected(): background_tasks.create(llm.get_combined_response(settings.llmType,settings.stocks,settings.start_date, settings.end_date,settings.newsType))
         
         def checkStockIsSelected() -> bool :
             if not settings.stocks:
@@ -156,5 +158,5 @@ with ui.tab_panels(tabs, value=one).classes('w-full'):
                 ui.label("Reasoning").bind_text_from(llm, 'combined_reasoning')
 
 
-#ui.run()
-ui.run(native=True,window_size=(1600, 900))
+#ui.run(favicon='res/icon.png',dark=True,reconnect_timeout=20)
+ui.run(native=True,window_size=(1600, 900),favicon='res/icon.png',dark=True,reconnect_timeout=20)
