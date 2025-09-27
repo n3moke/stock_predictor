@@ -15,16 +15,18 @@ def measure_time(write_log: bool = False):
             result: Any = await func(*args, **kargs)
             prompt_end_time:float = perf_counter()
             if write_log:
+                keywords = ["arima", "sentiment", "combined"]
                 for a in args:
                     if isinstance(a,list) and any(isinstance(d, dict) and 'stock' in d for d in a):
                         stock = a[0]['stock']
                     if isinstance(a,LLM.LLM_TYPE):
                         llm_type = a.value.replace(":","_")
+                    fc_method = getForecastMethod(func.__name__, keywords)
                     
                     
-                if stock is not None and llm_type is not None:
+                if stock is not None and llm_type is not None and fc_method is not None:
                         timestamp = datetime.now().strftime('%Y-%d-%m-%d_%H_%M_%S')
-                        log_string = f"{timestamp},{llm_type},{stock},{prompt_end_time - prompt_start_time:.3f}"
+                        log_string = f"{timestamp},{llm_type},{stock},{prompt_end_time - prompt_start_time:.3f},{fc_method}"
                         current_dir = os.path.dirname(os.path.abspath(__file__))
 
                         # Get the parent directory
@@ -36,7 +38,7 @@ def measure_time(write_log: bool = False):
                         
                         if not os.path.isfile(file_path):
                             with open(file_path, "w") as file:
-                                file.write("timestamp_filename,llm_type,stock,measurement_in_s\n")
+                                file.write("timestamp_filename,llm_type,stock,measurement_in_s,method\n")
                         with open(f"{file_path}", "a") as file:   
                             file.write(log_string + "\n")  # Add a newline after each entry
 
@@ -46,3 +48,9 @@ def measure_time(write_log: bool = False):
             
         return wrapper
     return decorator
+
+def getForecastMethod(text: str, keywords:list[str]) -> str:
+    for kw in keywords:
+        if kw in text:
+            return kw
+    return None
