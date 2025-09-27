@@ -13,7 +13,7 @@ settings = Settings()
 llm = LLM()
 dataprovider = Dataprovider()
 dataprovider.load_stocks()
-ui.label("Generative AI - stock prediction").classes('text-xl')
+ui.label("Generative AI - stock prediction").classes('text-3xl')
 with ui.tabs().classes('w-full') as tabs:
     one = ui.tab('Selection')
     two = ui.tab('Data')
@@ -160,6 +160,6 @@ with ui.tab_panels(tabs, value=one).classes('w-full'):
                 ui.label("Reasoning").bind_text_from(llm, 'combined_reasoning')
 
 
-#ui.run(favicon='res/icon.png',dark=True,reconnect_timeout=20)
-ui.run(native=True,window_size=(1600, 900),favicon='res/icon.png',reconnect_timeout=20)
+ui.run(favicon='res/icon.png',dark=True,reconnect_timeout=20)
+# ui.run(native=True,window_size=(1600, 900),favicon='res/icon.png',reconnect_timeout=20)
 # ui.run(native=True,window_size=(1600, 900),favicon='res/icon.png',dark=True,reconnect_timeout=20)
