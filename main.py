@@ -21,7 +21,7 @@ with ui.tabs().classes('w-full') as tabs:
     four = ui.tab('Prediction')
 with ui.tab_panels(tabs, value=one).classes('w-full'):
     with ui.tab_panel(one):
-        ui.label('Select period of historical data')
+        ui.label('Select period of historical data').classes('text-lg')
         ui.toggle({1:'1 month', 3:'3 months',6:' 6 months',12: '12 months',60: '5 years'},on_change=settings.update_dates).bind_value(settings,'timeframe')
         ui.label('Choose end date')
         with ui.input('Date').bind_value(settings, 'end_date_str') as date:
@@ -31,7 +31,8 @@ with ui.tab_panels(tabs, value=one).classes('w-full'):
                         ui.button('Close', on_click=menu.close).props('flat')
             with date.add_slot('append'):
                 ui.icon('edit_calendar').on('click', menu.open).classes('cursor-pointer')
-        ui.label('Stockselection')
+        ui.label('Stockselection').classes('text-lg')
+        search_input = ui.input(placeholder="Search for stock").props('clearable')
         table = ui.table(
             columns=[
             {'name': 'name', 'label': 'CompanyName', 'field': 'name', 'sortable': True, 'align': 'left'},
@@ -41,6 +42,7 @@ with ui.tab_panels(tabs, value=one).classes('w-full'):
             on_select=lambda e: settings.update_stocks(e.selection),
             pagination=10
         )
+        search_input.bind_value_to(table, 'filter')
         table.set_selection('single')
         ui.button('GOTO data tab', on_click=lambda: tabs.set_value(two))
     with ui.tab_panel(two):
@@ -66,9 +68,9 @@ with ui.tab_panels(tabs, value=one).classes('w-full'):
                     df = dataprovider.get_pandas_single_stock(settings.stocks, settings.end_date, settings.start_date)
                     ui.table.from_pandas(df,row_key='Date',pagination={'rowsPerPage': 10},title=settings.stocks[0]['name'])
     with ui.tab_panel(three):
-        ui.label('Choose LLM')
+        ui.label('Choose LLM').classes('text-lg')
         ui.toggle({0:'GEMMA3',1:'GEMMA3_27B', 2:'DEEPSEEK',3: 'DEEPSEEK70B',4: 'GPT-OSS:20b'},on_change=settings.update_llmType).bind_value(settings,'llmTypeInteger')
-        ui.label('Choose forecast method')
+        ui.label('Choose forecast method').classes('text-lg')
         ui.toggle({0:'ARIMA', 1:'Sentiment',2: 'ARIMA & Sentiment'},on_change=settings.update_forecast_method).bind_value(settings,'forecastMethod')
         with ui.card().bind_visibility(settings,'useArima').classes('w-full').props("autogrow") as arima_card:
             ui.textarea(label='Text', placeholder='start typing').bind_value(llm, 'arima_prompt_text').classes('w-full').props('autogrow input-style="min-height: 300px"')
@@ -109,7 +111,7 @@ with ui.tab_panels(tabs, value=one).classes('w-full'):
             return True
             
     with ui.tab_panel(four):
-        ui.label('Prediction')
+        ui.label('Prediction').classes('text-lg')
         
         with ui.card().bind_visibility(settings,'useArima').classes('w-full') as arima_result_card:
             arima_table_container = ui.column()
@@ -159,4 +161,5 @@ with ui.tab_panels(tabs, value=one).classes('w-full'):
 
 
 #ui.run(favicon='res/icon.png',dark=True,reconnect_timeout=20)
-ui.run(native=True,window_size=(1600, 900),favicon='res/icon.png',dark=True,reconnect_timeout=20)
+ui.run(native=True,window_size=(1600, 900),favicon='res/icon.png',reconnect_timeout=20)
+# ui.run(native=True,window_size=(1600, 900),favicon='res/icon.png',dark=True,reconnect_timeout=20)
