@@ -174,9 +174,12 @@ if __name__ == '__main__':
     dataprovider.__call__(['AAPL'])
     
     #fetch news
-    news = dataprovider.fetch_news_single_ticker('AAPL', 10,datetime.datetime(2020, 5, 17), datetime.datetime(2020, 5, 17), dataprovider.NEWSTYPE.PRESS)
-    dataprovider.prepare_news_sentiment(news)
-
+    # news = dataprovider.fetch_news_single_ticker('AAPL', 10,datetime(2020, 5, 17), datetime(2025, 9, 15), dataprovider.NEWSTYPE.PRESS)
+    # logger.debug(news)
+    # dataprovider.prepare_news_sentiment(news)
+    ticker = yf.Ticker('AAPL')
+    news = ticker.get_news(count=200,tab='press releases')
+    logger.info(news[0])
     #fetch stock data
     end_date = datetime(2025,1,31)
     start_date = datetime(2025,1,1)

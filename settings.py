@@ -7,7 +7,7 @@ from loguru import logger # type: ignore
 class Settings:
     def __init__(self):
         self.timeframe: int = 1
-        self.end_date_str = '2025-08-31'
+        self.end_date_str = '2025-09-15'
         self.stocks = []
         self.end_date = datetime.strptime(self.end_date_str, "%Y-%m-%d")
         self.start_date = self.end_date - relativedelta(months=self.timeframe)
@@ -54,3 +54,5 @@ class Settings:
             self.llmType = LLM.LLM_TYPE.DEEPSEEK70B
         elif(self.llmTypeInteger == 4):
             self.llmType = LLM.LLM_TYPE.GPT
+        elif(self.llmTypeInteger == 5):
+            self.llmType = LLM.LLM_TYPE.LLAMA_3_1_8b

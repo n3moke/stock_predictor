@@ -31,31 +31,9 @@ The column "Close" represents the closing price of the stock of that day and is 
 Important! The data covers the period from {startDayStr} ({start_date}) to {endDayStr} ({end_date}).
 If data for certain days are missing, for example weekends, exclude them.
 Provide me with the forecast for the {forcastRangeString}, excluding weekends and national holidays.
-Just anwser with the forcast in a .csv format with "date" and "prediction" column.
-Important! I want you to compute the forecast. I don't want python code!!!
-Constraint: I only want {forcastDayRange} days of forecast after {end_date}. So your forcast should not contain more than {forcastDayRange} rows of data.'''
-        self.combined_prompt_text = '''You are given two CSV strings with information about {companyName} and its stock {companyStockName}. Each contains date-indexed data:
-First CSV: Has two columns, date and close price for the {companyName} share, i.e. {companyStockName}.
-The column "Date" represents the date. It is in the following formart: 2022-01-03 is for example the 3rd of January of 2022.
-The column "Close" represents the closing price of the stock of that day and is in USD.
-Second CSV: Has two columns, date and sentiment_score.
-The column "pubDate" represents the date. It is in the following formart: 2022-01-03 is for example the 3rd of January of 2022.
-The column "Sentiment Score" represents the sentiment score of the news article for the date. It ranges from -1 (very negative) to 1 (very positive) where 0 indicates neutral sentiment
-
-Important! The data covers the period from {startDayStr} ({start_date}) to {endDayStr} ({end_date}).
-If data for certain days are missing in the first csv, for example weekends, exclude them.
-If date is missing for certain dates in the second csv, there are simply no news articles for that specific day.
-
-Your task is to compute a ARIMA forecast with the given data of the first csv. 
-Your task is to combine these datasets by matching on the date column, and then compute a forecast ONLY! for the {forcastRangeString}, excluding weekends and national holidays. So your forcast should not contain more than {forcastRangeString} rows of data!
-Use the sentiment score as an influencing factor to improve or refine the forecast.
-
-First CSV String (historical stock data):
-{sentiment_csv}
-Second CSV (Sentiment):
-{stock_csv}
-
-Return the result of the ARIMA forecast of the closing price as a CSV string with two columns: date, prediction.
+Just anwser with the forcast in a csv format with "date" and "prediction" column.
+Example:
+Return the result of the ARIMA forecast of the closing price in CSV format with two columns: date, prediction.
 ```csv
 date,prediction
 YYYY-MM-DD,###
@@ -66,7 +44,41 @@ YYYY-MM-DD,###
 Replace YYYY-MM-DD with forecasted dates and ### with the numeric predictions of the closing price.
 The CSV must be inside the ```csv ``` block.
 Do not include any additional text, explanations, code, or apologetic language
-Constraint: I only want {forcastDayRange} days of forecast after {end_date}. So your forcast should only contain {forcastDayRange} rows of data. Also consider some months only contain never contain more than 31 days.
+Important! I want you to compute the forecast. I don't want python code!!!
+Constraint: I only want {forcastDayRange} days of forecast after {end_date}. So your forcast should not contain more than {forcastDayRange} rows of data.'''
+        self.combined_prompt_text = '''You are given two CSV strings with information about {companyName} and its stock {companyStockName}. Each contains date-indexed data:
+First CSV: Has two columns, date and close price for the {companyName} share, i.e. {companyStockName}.
+The column "Date" represents the date. It is in the following format: 2022-01-03 is for example the 3rd of January of 2022.
+The column "Close" represents the closing price of the stock of that day and is in USD.
+Second CSV: Has two columns, date and sentiment_score.
+The column "pubDate" represents the date. It is in the following format: 2022-01-03 is for example the 3rd of January of 2022.
+The column "Sentiment Score" represents the sentiment score of the news article for the date. It ranges from -1 (very negative) to 1 (very positive) where 0 indicates neutral sentiment
+
+Important! The data covers the period from {startDayStr} ({start_date}) to {endDayStr} ({end_date}).
+If data for certain days are missing in the first csv, for example weekends, exclude them.
+If date is missing for certain dates in the second csv, there are simply no news articles for that specific day.
+
+Your task is to compute a ARIMA forecast with the given data of the first csv. 
+Your task is to combine these datasets by matching on the date column, and then compute a forecast ONLY! for the {forcastRangeString}, excluding weekends and national holidays. So your forecast should not contain more than {forcastDayRange} rows of data!
+Use the sentiment score as an influencing factor to improve or refine the forecast.
+
+First CSV String (historical stock data):
+{sentiment_csv}
+Second CSV (Sentiment):
+{stock_csv}
+
+Return the result of the ARIMA forecast of the closing price in CSV format with two columns: date, prediction.
+```csv
+date,prediction
+YYYY-MM-DD,###
+YYYY-MM-DD,###
+YYYY-MM-DD,###
+```
+
+Replace YYYY-MM-DD with forecasted dates and ### with the numeric predictions of the closing price.
+The CSV must be inside the ```csv ``` block.
+Do not include any additional text, explanations, code, or apologetic language
+Constraint: I only want {forcastDayRange} days of forecast after {end_date}. So your forecast should only contain {forcastDayRange} rows of data. Also consider some months only contain never contain more than 31 days.
 Important! I want you to compute the forecast. I don't want python code!!!
 
 '''
@@ -90,6 +102,7 @@ Important! I want you to compute the forecast. I don't want python code!!!
         DEEPSEEK:str = 'deepseek-r1'
         DEEPSEEK70B:str = 'deepseek-r1:70b'
         GPT: str = 'gpt-oss:20b'
+        LLAMA_3_1_8b: str = 'llama3.1:8b'
 
     async def _ask_llm_sentiment(self, llm_type: LLM_TYPE, input_content: str, system_prompt:str) ->  str | tuple[str, str]:
         logger.debug(f"LLM Type: {llm_type}")
@@ -155,7 +168,7 @@ Important! I want you to compute the forecast. I don't want python code!!!
         self.isArimaRunning = False
 
     @measure_time(write_log=True)
-    async def get_sentiment_respone(self,llm_type: LLM_TYPE, stocks:list[str],start_date: datetime, end_date: datetime,newsType: Dataprovider.NEWSTYPE) -> pd.DataFrame:
+    async def get_sentiment_respone(self,llm_type: LLM_TYPE, stocks:list[str],start_date: datetime, end_date: datetime,newsType: Dataprovider.NEWSTYPE,timeframe:int) -> pd.DataFrame:
         if not stocks:
             logger.warning("No stock was selected.")
             ui.notify('Please a stock first.')
@@ -168,6 +181,7 @@ Important! I want you to compute the forecast. I don't want python code!!!
             logger.debug(stock)
             logger.debug(f"From {start_date} to {end_date}")
             news = self.dp.fetch_news_single_ticker(stock, 200,start_date, end_date, newsType)
+            logger.info(news)
             self.numberOfSentiments = len(news)
             logger.debug(f"Number of news articles: {self.numberOfSentiments}")
             news = self.dp.prepare_news_sentiment(news)
@@ -178,11 +192,11 @@ Important! I want you to compute the forecast. I don't want python code!!!
             # Strip time, keep only date
             sentiment_analysis['pubDate'] = sentiment_analysis['pubDate'].dt.date
             logger.info(f"printing sentiment analysis result \n {sentiment_analysis}")
-            self.save_response_as_csv(stock,sentiment_analysis,'sentiment', llm_type)
+            self.save_response_as_csv(stock,sentiment_analysis,'sentiment', llm_type,timeframe)
             return sentiment_analysis
     
     @measure_time(write_log=True)
-    async def get_arima_response(self,llm_type: LLM_TYPE, stocks:list[str],start_date: datetime, end_date: datetime) -> pd.DataFrame:
+    async def get_arima_response(self,llm_type: LLM_TYPE, stocks:list[str],start_date: datetime, end_date: datetime,timeframe:int) -> pd.DataFrame:
         if not stocks:
             logger.warning("No stock was selected.")
             ui.notify('Please a stock first.')
@@ -196,17 +210,17 @@ Important! I want you to compute the forecast. I don't want python code!!!
             stockData = self.dp.fetch_historical_stock_data(stock, end_date, start_date)
             stockData = self.dp.prepare_stock_data_arima(stockData)
 
-            prompt = self.format_arima_prompt(stockData,start_date,end_date,10,stocks)
+            prompt = self.format_arima_prompt(stockData,start_date,end_date,15,stocks)
             logger.debug(f"prompt: \n {prompt}")
             response = await self.ask_llm_prompt(llm_type,prompt)
             self._resetProgessIndicators()
             logger.info(response)
             arima_response = self._process_and_set_arima_response(response)
-            self.save_response_as_csv(stock,arima_response,'arima', llm_type)
+            self.save_response_as_csv(stock,arima_response,'arima', llm_type,timeframe)
             return response
 
     @measure_time(write_log=True)   
-    async def get_combined_response(self,llm_type: LLM_TYPE, stocks:list[str],start_date: datetime, end_date: datetime, newsType: Dataprovider.NEWSTYPE) -> pd.DataFrame:
+    async def get_combined_response(self,llm_type: LLM_TYPE, stocks:list[str],start_date: datetime, end_date: datetime, newsType: Dataprovider.NEWSTYPE,timeframe:int) -> pd.DataFrame:
         if not stocks:
             logger.warning("No stock was selected.")
             ui.notify('Please a stock first.')
@@ -230,6 +244,7 @@ Important! I want you to compute the forecast. I don't want python code!!!
             logger.info(f"Sentiment Result for combined forecast: \n {sentiment_analysis}")
             sentiment_csv = self.dp.prepare_sentiment_combined_forecast(sentiment_analysis)
 
+
             #now get historical stock data
             logger.debug(stock)
             logger.debug(f"From {start_date} to {end_date}")
@@ -238,19 +253,20 @@ Important! I want you to compute the forecast. I don't want python code!!!
             stock_csv = self.dp.prepare_stock_data_arima(stockData)
 
             #prepare prompt
-            prompt = self.format_combined_prompt(sentiment_csv,stock_csv,start_date,end_date,10,stocks)
+            prompt = self.format_combined_prompt(sentiment_csv,stock_csv,start_date,end_date,15,stocks)
             logger.debug(f"formatted prompt: \n {prompt}")            
             response = await self.ask_llm_prompt(llm_type,prompt)
             
             logger.info(f"combined response: {response} \n##########################")
             processed_response =  self._process_and_set_combined_response(response)
             #save response as csv
-            self.save_response_as_csv(stock,processed_response, 'combined',llm_type)
+            self.save_response_as_csv(stock,sentiment_analysis,'sentiment_combined', llm_type,timeframe)
+            self.save_response_as_csv(stock,processed_response, 'combined',llm_type,timeframe)
             self._resetProgessIndicators()
             return response
 
     def _process_and_set_arima_response(self, response:str) -> pd.DataFrame:
-        pattern = r"^date,prediction(?:\r?\n\d{4}-\d{2}-\d{2},\d+(\.\d+)?)+"
+        pattern = r"^[Dd]ate,\s*[Pp]rediction(?:\r?\n\d{4}-\d{2}-\d{2},\d+(\.\d+)?)+"
         match = re.search(pattern, response, re.MULTILINE)
         logger.warning(match)
         if match:
@@ -265,22 +281,18 @@ Important! I want you to compute the forecast. I don't want python code!!!
             
 
     def _process_and_set_combined_response(self, response) -> pd.DataFrame:
-            # prediction_pattern = r"```csv([\s\S]*?)(?=```|###|@@@|[a-zA-Z])"
-            # prediction_pattern = r"```csv([\s\S]*?)(?=```|###|@@@|[a-zA-Z])"
-
-            prediction_pattern = r"```csv([\s\S]*?)```"
-            match_sentiment = re.search(prediction_pattern, response)
-            extracted_csv = match_sentiment.group(1) if match_sentiment else None
-            logger.info(f"extracted csv: \n{extracted_csv}")
-            #extract text between ### and ### or '''
-            # reasoning_pattern = r"@@@([\s\S]*?)(?=```|###|@@@)"
-            # match_reasoning = re.search(reasoning_pattern, response)
-            # extracted_reasoning = match_reasoning.group(1) if match_reasoning else None
-            combined_result = pd.read_csv(StringIO(extracted_csv))
-            self.combined_response = combined_result
-            # self.combined_reasoning = extracted_reasoning
-            logger.info(combined_result)
-            return combined_result
+        pattern = r"^[Dd]ate,\s*[Pp]rediction(?:\r?\n\d{4}-\d{2}-\d{2},\d+(\.\d+)?)+"
+        match = re.search(pattern, response, re.MULTILINE)
+        logger.warning(match)
+        if match:
+            extracted_csv = match.group(0)
+            logger.debug(f"Regex result: \n {extracted_csv}")
+            arima_result = pd.read_csv(StringIO(extracted_csv))
+            logger.debug(arima_result)
+            self.arima_response = arima_result
+            return arima_result
+        else:
+            return None
 
     def create_sentiment_table(self,data: pd.DataFrame) -> ui.table:
         data.columns = [f"{col}" for col in data.columns]
@@ -322,14 +334,14 @@ Important! I want you to compute the forecast. I don't want python code!!!
         logger.debug(f"forcastrangeString: {forcastrangeString}")
         return forcastrangeString
     
-    def save_response_as_csv(self, stock :str , data: pd.DataFrame, responseType: str, llm_type: LLM_TYPE):
+    def save_response_as_csv(self, stock :str , data: pd.DataFrame, responseType: str, llm_type: LLM_TYPE,timeframe:int):
         dir = 'results'
         os.makedirs(dir, exist_ok=True)
-        timestamp = datetime.now().strftime('%Y-%d-%m-%d_%H_%M_%S')
+        timestamp = datetime.now().strftime('%Y-%d-%m_%H_%M_%S')
         llm_string = llm_type.value.replace(":","_")
-        filename = os.path.join(dir, f"{timestamp}_log_{responseType}_{stock}_{llm_string}.csv")
+        filename = os.path.join(dir, f"{timestamp}_log_{responseType}_{stock}_{llm_string}_{timeframe}M.csv")
         logger.warning(f"data for csv : \n {data}" )
-        data.to_csv(filename,index=False)
+        data.to_csv(filename, sep=';', decimal=',',index=False)
 
 if __name__ == '__main__': 
 
