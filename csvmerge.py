@@ -16,6 +16,21 @@ def merge_csv_With_path_andTimeframe(timeframe: int,stockName: str ,llmName: str
     merged = reduce(lambda left, right: pd.merge(left, right, on='date', how='outer'), dfs)
     merged.to_csv(f'results/{stockName}_{llmName}_{timeframe}m_{method}.csv', sep=';', decimal=',', index=False)
 
+def merge_sentiment_Csvs(timeframe: int, stockName: str, llmName: str, method:str): 
+    csv_files = glob.glob(f'results/{stockName}/{timeframe}M/sent/*.csv')
+    merged = ""
+    dfs = []
+    print(csv_files)
+    for idx, file in enumerate(csv_files):
+        df = pd.read_csv(file, delimiter=';', decimal=',')
+        df.rename(columns={'Sentiment Score': f'sent_score_{idx+1}'}, inplace=True)
+        dfs.append(df)
+        print(df)
+    # print(dfs)
+    from functools import reduce
+    merged = reduce(lambda left, right: pd.merge(left, right, on='pubDate', how='outer'), dfs)
+    merged.to_csv(f'results/{stockName}_{llmName}_{timeframe}m_{method}.csv', sep=';', decimal=',', index=False)
+
 
 if __name__ == '__main__': 
     # stockName = 'NVDA'
@@ -30,9 +45,7 @@ if __name__ == '__main__':
     # merge_csv_With_path_andTimeframe(stockName=stockName,timeframe=3,llmName=llm_name,method=method)
     # merge_csv_With_path_andTimeframe(stockName=stockName,timeframe=12,llmName=llm_name,method=method)
     # merge_csv_With_path_andTimeframe(stockName=stockName,timeframe=60,llmName=llm_name,method=method)
-    stockName = 'AAPL'
-    merge_csv_With_path_andTimeframe(stockName=stockName,timeframe=1,llmName=llm_name,method=method)
-    merge_csv_With_path_andTimeframe(stockName=stockName,timeframe=3,llmName=llm_name,method=method)
+    
     # merge_csv_With_path_andTimeframe(stockName=stockName,timeframe=12,llmName=llm_name,method=method)
     # merge_csv_With_path_andTimeframe(stockName=stockName,timeframe=60,llmName=llm_name,method=method)
     # llm_name = 'gemma'
@@ -40,31 +53,65 @@ if __name__ == '__main__':
     # merge_csv_With_path_andTimeframe(stockName=stockName,timeframe=3,llmName=llm_name,method=method)
     # merge_csv_With_path_andTimeframe(stockName=stockName,timeframe=12,llmName=llm_name,method=method)
     # merge_csv_With_path_andTimeframe(stockName=stockName,timeframe=60,llmName=llm_name,method=method)
-
+    stockName = 'AAPL'
+    # merge_csv_With_path_andTimeframe(stockName=stockName,timeframe=1,llmName=llm_name,method=method)
+    # merge_csv_With_path_andTimeframe(stockName=stockName,timeframe=3,llmName=llm_name,method=method)
     stockName = 'TSLA'
-    merge_csv_With_path_andTimeframe(stockName=stockName,timeframe=1,llmName=llm_name,method=method)
-    merge_csv_With_path_andTimeframe(stockName=stockName,timeframe=3,llmName=llm_name,method=method)
+    # merge_csv_With_path_andTimeframe(stockName=stockName,timeframe=1,llmName=llm_name,method=method)
+    # merge_csv_With_path_andTimeframe(stockName=stockName,timeframe=3,llmName=llm_name,method=method)
     stockName = 'NVDA'
-    merge_csv_With_path_andTimeframe(stockName=stockName,timeframe=1,llmName=llm_name,method=method)
-    merge_csv_With_path_andTimeframe(stockName=stockName,timeframe=3,llmName=llm_name,method=method)
+    # merge_csv_With_path_andTimeframe(stockName=stockName,timeframe=1,llmName=llm_name,method=method)
+    # merge_csv_With_path_andTimeframe(stockName=stockName,timeframe=3,llmName=llm_name,method=method)
     stockName = 'NFLX'
-    merge_csv_With_path_andTimeframe(stockName=stockName,timeframe=1,llmName=llm_name,method=method)
-    merge_csv_With_path_andTimeframe(stockName=stockName,timeframe=3,llmName=llm_name,method=method)
+    # merge_csv_With_path_andTimeframe(stockName=stockName,timeframe=1,llmName=llm_name,method=method)
+    # merge_csv_With_path_andTimeframe(stockName=stockName,timeframe=3,llmName=llm_name,method=method)
     stockName = 'MSFT'
-    merge_csv_With_path_andTimeframe(stockName=stockName,timeframe=1,llmName=llm_name,method=method)
-    merge_csv_With_path_andTimeframe(stockName=stockName,timeframe=3,llmName=llm_name,method=method)
+    # merge_csv_With_path_andTimeframe(stockName=stockName,timeframe=1,llmName=llm_name,method=method)
+    # merge_csv_With_path_andTimeframe(stockName=stockName,timeframe=3,llmName=llm_name,method=method)
     stockName = 'META'
-    merge_csv_With_path_andTimeframe(stockName=stockName,timeframe=1,llmName=llm_name,method=method)
-    merge_csv_With_path_andTimeframe(stockName=stockName,timeframe=3,llmName=llm_name,method=method)
+    # merge_csv_With_path_andTimeframe(stockName=stockName,timeframe=1,llmName=llm_name,method=method)
+    # merge_csv_With_path_andTimeframe(stockName=stockName,timeframe=3,llmName=llm_name,method=method)
     stockName = 'GOOGL'
-    merge_csv_With_path_andTimeframe(stockName=stockName,timeframe=1,llmName=llm_name,method=method)
-    merge_csv_With_path_andTimeframe(stockName=stockName,timeframe=3,llmName=llm_name,method=method)
+    # merge_csv_With_path_andTimeframe(stockName=stockName,timeframe=1,llmName=llm_name,method=method)
+    # merge_csv_With_path_andTimeframe(stockName=stockName,timeframe=3,llmName=llm_name,method=method)
     stockName = 'GOOG'
-    merge_csv_With_path_andTimeframe(stockName=stockName,timeframe=1,llmName=llm_name,method=method)
-    merge_csv_With_path_andTimeframe(stockName=stockName,timeframe=3,llmName=llm_name,method=method)
+    # merge_csv_With_path_andTimeframe(stockName=stockName,timeframe=1,llmName=llm_name,method=method)
+    # merge_csv_With_path_andTimeframe(stockName=stockName,timeframe=3,llmName=llm_name,method=method)
     stockName = 'AVGO'
-    merge_csv_With_path_andTimeframe(stockName=stockName,timeframe=1,llmName=llm_name,method=method)
-    merge_csv_With_path_andTimeframe(stockName=stockName,timeframe=3,llmName=llm_name,method=method)
+    # merge_csv_With_path_andTimeframe(stockName=stockName,timeframe=1,llmName=llm_name,method=method)
+    # merge_csv_With_path_andTimeframe(stockName=stockName,timeframe=3,llmName=llm_name,method=method)
     stockName = 'AMZN'
-    merge_csv_With_path_andTimeframe(stockName=stockName,timeframe=1,llmName=llm_name,method=method)
-    merge_csv_With_path_andTimeframe(stockName=stockName,timeframe=3,llmName=llm_name,method=method)
+    # merge_csv_With_path_andTimeframe(stockName=stockName,timeframe=1,llmName=llm_name,method=method)
+    # merge_csv_With_path_andTimeframe(stockName=stockName,timeframe=3,llmName=llm_name,method=method)
+    method = 'sentiment'
+
+    stockName = 'AAPL'
+    # merge_sentiment_Csvs(stockName=stockName,timeframe=1,llmName=llm_name,method=method)
+    # merge_sentiment_Csvs(stockName=stockName,timeframe=3,llmName=llm_name,method=method)
+    # stockName = 'TSLA'
+    # merge_sentiment_Csvs(stockName=stockName,timeframe=1,llmName=llm_name,method=method)
+    # merge_sentiment_Csvs(stockName=stockName,timeframe=3,llmName=llm_name,method=method)
+    # stockName = 'NVDA'
+    # merge_sentiment_Csvs(stockName=stockName,timeframe=1,llmName=llm_name,method=method)
+    # merge_sentiment_Csvs(stockName=stockName,timeframe=3,llmName=llm_name,method=method)
+    # stockName = 'NFLX'
+    # merge_sentiment_Csvs(stockName=stockName,timeframe=1,llmName=llm_name,method=method)
+    # merge_sentiment_Csvs(stockName=stockName,timeframe=3,llmName=llm_name,method=method)
+    # stockName = 'MSFT'
+    # merge_sentiment_Csvs(stockName=stockName,timeframe=1,llmName=llm_name,method=method)
+    # merge_sentiment_Csvs(stockName=stockName,timeframe=3,llmName=llm_name,method=method)
+    stockName = 'META'
+    # merge_sentiment_Csvs(stockName=stockName,timeframe=1,llmName=llm_name,method=method)
+    merge_sentiment_Csvs(stockName=stockName,timeframe=3,llmName=llm_name,method=method)
+    # stockName = 'GOOGL'
+    # merge_sentiment_Csvs(stockName=stockName,timeframe=1,llmName=llm_name,method=method)
+    # merge_sentiment_Csvs(stockName=stockName,timeframe=3,llmName=llm_name,method=method)
+    # stockName = 'GOOG'
+    # merge_sentiment_Csvs(stockName=stockName,timeframe=1,llmName=llm_name,method=method)
+    # merge_sentiment_Csvs(stockName=stockName,timeframe=3,llmName=llm_name,method=method)
+    # stockName = 'AVGO'
+    # merge_sentiment_Csvs(stockName=stockName,timeframe=1,llmName=llm_name,method=method)
+    # merge_sentiment_Csvs(stockName=stockName,timeframe=3,llmName=llm_name,method=method)
+    # stockName = 'AMZN'
+    # merge_sentiment_Csvs(stockName=stockName,timeframe=1,llmName=llm_name,method=method)
+    # merge_sentiment_Csvs(stockName=stockName,timeframe=3,llmName=llm_name,method=method)
