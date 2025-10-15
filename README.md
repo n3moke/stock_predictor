@@ -4,7 +4,7 @@ Bachelor Thesis Project
 
 ## About
 
-This repository contains the code and materials for a Bachelor's thesis project focused on stock market prediction using yfinacne, niceGui, ollama and different llm models.
+This repository contains the code and materials for a Bachelor's thesis project focused on stock market prediction using yfinance, niceGui, ollama and different llm models.
 
 ## Features
 - Sentiment Analysis of news fetched from Yahoo finance
