@@ -24,11 +24,17 @@ def merge_sentiment_Csvs(timeframe: int, stockName: str, llmName: str, method:st
     for idx, file in enumerate(csv_files):
         df = pd.read_csv(file, delimiter=';', decimal=',')
         df.rename(columns={'Sentiment Score': f'sent_score_{idx+1}'}, inplace=True)
+        df = df.drop(columns=['pubDate'])
+        df['id'] = range(len(df))
+        cols = df.columns.tolist()
+        cols = ['id'] + [col for col in cols if col != 'id']
+        df = df[cols]
         dfs.append(df)
         print(df)
     # print(dfs)
     from functools import reduce
-    merged = reduce(lambda left, right: pd.merge(left, right, on='pubDate', how='outer'), dfs)
+
+    merged = reduce(lambda left, right: pd.merge(left, right, on='id', how='outer'), dfs)
     merged.to_csv(f'results/{stockName}_{llmName}_{timeframe}m_{method}.csv', sep=';', decimal=',', index=False)
 
 
@@ -86,32 +92,32 @@ if __name__ == '__main__':
     method = 'sentiment'
 
     stockName = 'AAPL'
-    # merge_sentiment_Csvs(stockName=stockName,timeframe=1,llmName=llm_name,method=method)
-    # merge_sentiment_Csvs(stockName=stockName,timeframe=3,llmName=llm_name,method=method)
-    # stockName = 'TSLA'
-    # merge_sentiment_Csvs(stockName=stockName,timeframe=1,llmName=llm_name,method=method)
-    # merge_sentiment_Csvs(stockName=stockName,timeframe=3,llmName=llm_name,method=method)
-    # stockName = 'NVDA'
-    # merge_sentiment_Csvs(stockName=stockName,timeframe=1,llmName=llm_name,method=method)
-    # merge_sentiment_Csvs(stockName=stockName,timeframe=3,llmName=llm_name,method=method)
-    # stockName = 'NFLX'
-    # merge_sentiment_Csvs(stockName=stockName,timeframe=1,llmName=llm_name,method=method)
-    # merge_sentiment_Csvs(stockName=stockName,timeframe=3,llmName=llm_name,method=method)
-    # stockName = 'MSFT'
-    # merge_sentiment_Csvs(stockName=stockName,timeframe=1,llmName=llm_name,method=method)
-    # merge_sentiment_Csvs(stockName=stockName,timeframe=3,llmName=llm_name,method=method)
-    stockName = 'META'
-    # merge_sentiment_Csvs(stockName=stockName,timeframe=1,llmName=llm_name,method=method)
+    merge_sentiment_Csvs(stockName=stockName,timeframe=1,llmName=llm_name,method=method)
     merge_sentiment_Csvs(stockName=stockName,timeframe=3,llmName=llm_name,method=method)
-    # stockName = 'GOOGL'
-    # merge_sentiment_Csvs(stockName=stockName,timeframe=1,llmName=llm_name,method=method)
-    # merge_sentiment_Csvs(stockName=stockName,timeframe=3,llmName=llm_name,method=method)
-    # stockName = 'GOOG'
-    # merge_sentiment_Csvs(stockName=stockName,timeframe=1,llmName=llm_name,method=method)
-    # merge_sentiment_Csvs(stockName=stockName,timeframe=3,llmName=llm_name,method=method)
+    stockName = 'TSLA'
+    merge_sentiment_Csvs(stockName=stockName,timeframe=1,llmName=llm_name,method=method)
+    merge_sentiment_Csvs(stockName=stockName,timeframe=3,llmName=llm_name,method=method)
+    stockName = 'NVDA'
+    merge_sentiment_Csvs(stockName=stockName,timeframe=1,llmName=llm_name,method=method)
+    merge_sentiment_Csvs(stockName=stockName,timeframe=3,llmName=llm_name,method=method)
+    stockName = 'NFLX'
+    merge_sentiment_Csvs(stockName=stockName,timeframe=1,llmName=llm_name,method=method)
+    merge_sentiment_Csvs(stockName=stockName,timeframe=3,llmName=llm_name,method=method)
+    stockName = 'MSFT'
+    merge_sentiment_Csvs(stockName=stockName,timeframe=1,llmName=llm_name,method=method)
+    merge_sentiment_Csvs(stockName=stockName,timeframe=3,llmName=llm_name,method=method)
+    stockName = 'META'
+    merge_sentiment_Csvs(stockName=stockName,timeframe=1,llmName=llm_name,method=method)
+    merge_sentiment_Csvs(stockName=stockName,timeframe=3,llmName=llm_name,method=method)
+    stockName = 'GOOGL'
+    merge_sentiment_Csvs(stockName=stockName,timeframe=1,llmName=llm_name,method=method)
+    merge_sentiment_Csvs(stockName=stockName,timeframe=3,llmName=llm_name,method=method)
+    stockName = 'GOOG'
+    merge_sentiment_Csvs(stockName=stockName,timeframe=1,llmName=llm_name,method=method)
+    merge_sentiment_Csvs(stockName=stockName,timeframe=3,llmName=llm_name,method=method)
     # stockName = 'AVGO'
     # merge_sentiment_Csvs(stockName=stockName,timeframe=1,llmName=llm_name,method=method)
     # merge_sentiment_Csvs(stockName=stockName,timeframe=3,llmName=llm_name,method=method)
-    # stockName = 'AMZN'
-    # merge_sentiment_Csvs(stockName=stockName,timeframe=1,llmName=llm_name,method=method)
-    # merge_sentiment_Csvs(stockName=stockName,timeframe=3,llmName=llm_name,method=method)
+    stockName = 'AMZN'
+    merge_sentiment_Csvs(stockName=stockName,timeframe=1,llmName=llm_name,method=method)
+    merge_sentiment_Csvs(stockName=stockName,timeframe=3,llmName=llm_name,method=method)
